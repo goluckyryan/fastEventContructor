@@ -3,36 +3,52 @@
 #include "TTree.h"
 #include "TH1.h"
 
-// BinaryReader haha(10000);
+#include <queue>
+#include "class_DIG.h"
+
+BinaryReader haha(1000);
+
+struct CompareEvent {
+  bool operator()(const DIG_Hit& a, const DIG_Hit& b) {
+    return a.EVENT_TIMESTAMP > b.EVENT_TIMESTAMP;
+  }
+};
 
 void test(){
   
-  // haha.Open("../data/h093_21F_d3He_run_040.gtd02_000_0105");
-  // // haha.Open("merged_file_000_000");
+  haha.Open("data/dgs_run10/dgs_run10.gtd01_000_0101_1");
 
   // haha.Scan(false);
 
   // printf(" hit count: %d \n", haha.GetNumData());
 
-  // haha.ReadNextNHitsFromFile(true);
+  haha.ReadNextNHitsFromFile(true);
 
-  // size_t memSize = haha.GetMemoryUsageBytes();
-  // printf("Memory %zu bytes = %.3f MB\n", memSize, memSize / (1024.0 * 1024.0));  
+  size_t memSize = haha.GetMemoryUsageBytes();
+  printf("Memory %zu bytes = %.3f MB\n", memSize, memSize / (1024.0 * 1024.0));  
 
-  // // haha.GetHit(0).Print();
+  printf(" number of hits: %u \n", haha.GetHitSize());
 
 
-  // for( int i = 0; i < 10000; i++){
-  //   Hit hit = haha.GetHit(i);
-  //   if( hit.header.timestamp == 78478520128183 ){
+  std::priority_queue<DIG_Hit, std::vector<DIG_Hit>, CompareEvent> hitsQueue; // Priority queue to store events
 
-  //     printf(" ====================== i = %d\n", i);
 
-  //     hit.Print();
-  //     Event event = hit.DecodePayload(true);
-  //     event.Print();
-  //     // printf(" %3d | %lu | %d | %d %d\n", i,   hit.header.timestamp, event.channel, event.pre_rise_energy, event.post_rise_energy);
-  //   }
+  for( int i = 0; i < haha.GetHitSize(); i++){
+    hitsQueue.push(haha.GetHit(i).DecodePayload());
+    // printf(" %3d | %lu | %d | %d %d\n", i,   hit.header.timestamp, event.channel, event.pre_rise_energy, event.post_rise_energy);
+  }
+
+  printf(" number of hits: %u \n", haha.GetHitSize());
+
+  // for( int i = 0; i < 1; i++){
+  //   DataBlock hit = haha.GetHit(i);
+  //   hit.Print();
+
+  //   DIG_Hit digHit = hit.DecodePayload();
+
+  //   digHit.Print();
+
+  // //   // printf(" %3d | %lu | %d | %d %d\n", i,   hit.header.timestamp, event.channel, event.pre_rise_energy, event.post_rise_energy);
   // }
 
   
@@ -61,6 +77,8 @@ void test(){
   //   word = haha.read<uint32_t>();
   //   printf("%3d | 0x%08X\n", i, word);
   // }
+
+  return;
 
 
   //############# compare tree

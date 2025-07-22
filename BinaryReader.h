@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <algorithm>
 
-#include "Hit.h"  
+#include "class_DataBlock.h"  
 
 class BinaryReader {
 public:
@@ -24,10 +24,11 @@ public:
     DeleteHits();
   }
 
-  void Open(const std::string& filename);
+  void Open(const std::string& filename, bool debug = false) ;
   std::string GetFileName() const { return fileName; }  // Get the file name
   unsigned short GetRunID() const { return runID; }  // Get the run ID
   unsigned short GetDigID() const { return DigID; }  // Get the last three digits of the file name
+  unsigned short GetChannel() const { return channel; }  // Get the channel number
   unsigned short GetFileIndex() const { return fileIndex; }  // Get the second last three digits of the file name
   size_t GetFileSize() const { return fileSize; }  // Get size of the file in bytes
 
@@ -57,8 +58,8 @@ public:
   void ReadNextNHitsFromFile(bool debug = false); 
   unsigned int GetMaxHitSize() const { return maxHitSize; }  // Get the maximum size of the hits vector
   unsigned int GetHitSize() const { return hitSize; }  // Get the size of the hits vector
-  const Hit * GetHits() const { return hits; }  // Get vector of hits
-  Hit GetHit(unsigned int index) const {
+  const DataBlock * GetHits() const { return hits; }  // Get vector of hits
+  DataBlock GetHit(unsigned int index) const {
     if (index < maxHitSize) {
       return hits[index];  // Return the hit at the specified index
     } else {
@@ -70,7 +71,7 @@ public:
     if (hits != nullptr) {
       delete[] hits;  // Delete the existing hits array
     }
-    hits = new Hit[size];  // Create a new hits array with the specified size
+    hits = new DataBlock[size];  // Create a new hits array with the specified size
     maxHitSize = size;  // Update the maximum hit size
     hitSize = 0;  // Reset hit size
   }
@@ -88,6 +89,7 @@ private:
   std::string fileName;
   size_t fileSize; // Size of the file in bytes
   unsigned short runID;
+  unsigned short channel;
   unsigned short DigID; // the last three digits of the file name, e.g. 001, 002, etc.
   unsigned short fileIndex; // the 2nd last three digits of the file name, e.g. 000, 001, etc. to indicate the next file from the same DigID.
 
@@ -97,9 +99,9 @@ private:
   unsigned int totalNumHits;
   unsigned int hitID; // current hit ID
 
-  // std::vector<Hit> hits; // Vector to store hits
+  // std::vector<DataBlock> hits; // Vector to store hits
 
-  Hit * hits;
+  DataBlock * hits;
   unsigned int maxHitSize; // Size of the hits array
   unsigned int hitSize; // Number of hits read from the file
   uint64_t lastTimestampOfHits; // Last timestamp of hits read from the file
@@ -124,7 +126,7 @@ private:
 
 inline void BinaryReader::Scan(bool quick, bool debug) {
 
-  Hit hit;
+  DataBlock hit;
   totalNumHits = 0;
   unsigned filePos = 0; // byte
   uint32_t type = 0;
@@ -133,8 +135,6 @@ inline void BinaryReader::Scan(bool quick, bool debug) {
 
   unsigned short count = 0;
   std::vector<uint64_t> timestampList; // Store timestamps for error checking
-
-  uint64_t last_timestamp = 0; // Last timestamp of hits
 
   do{
     hit.header = Read<GEBHeader>();
@@ -152,7 +152,6 @@ inline void BinaryReader::Scan(bool quick, bool debug) {
  
     if( timestampList.size() >= maxHitSize ){ // check the timestamp error every maxHitSize hits
       std::sort(timestampList.begin(), timestampList.end()); // Sort the timestamps for error checking
-      last_timestamp = timestampList.back(); // Get the last timestamp in the sorted list
       
       if( timestampList.front() < globalEarliestTime) globalEarliestTime = timestampList.front(); // Update the global earliest time
       if( timestampList.back() > globalLastTime) globalLastTime = timestampList.back(); // Update the global last time 
@@ -187,7 +186,7 @@ inline void BinaryReader::Scan(bool quick, bool debug) {
   if( timestampList.front() < globalEarliestTime) globalEarliestTime = timestampList.front(); // Update the global earliest time
   if( timestampList.back() > globalLastTime) globalLastTime = timestampList.back(); // Update the global last time  
 
-  if( debug ) printf("number of Hit Found : %d \n", totalNumHits);
+  if( debug ) printf("number of DataBlock Found : %d \n", totalNumHits);
   if( timestamp_error_counter > 0 && debug) printf("%s : timestamp error found for %u times.\n", fileName.c_str(), timestamp_error_counter);
 
   file.seekg(0, std::ios::beg);
@@ -225,7 +224,7 @@ inline void BinaryReader::ReadNextNHitsFromFile(bool debug) {
     if( debug ) printf("timestamp error found for %u times. Sort data.\n", timestamp_error_counter);
 
     //sort the hits by timestamp
-    std::sort(hits, hits + hitSize, [](const Hit& a, const Hit& b) {
+    std::sort(hits, hits + hitSize, [](const DataBlock& a, const DataBlock& b) {
       return a.header.timestamp < b.header.timestamp;
     });
 
@@ -254,7 +253,7 @@ inline void BinaryReader::ReadNextNHitsFromFile(bool debug) {
 
 inline size_t BinaryReader::GetMemoryUsageBytes() {
   size_t total = sizeof(BinaryReader);
-  total += maxHitSize * sizeof(Hit);
+  total += maxHitSize * sizeof(DataBlock);
   for (int i = 0; i < maxHitSize; ++i) {
       total += sizeof(GEBHeader);
       total += hits[i].payload.capacity() * sizeof(uint32_t);
@@ -263,7 +262,7 @@ inline size_t BinaryReader::GetMemoryUsageBytes() {
 }
 
 
-inline void BinaryReader::Open(const std::string& filename){
+inline void BinaryReader::Open(const std::string& filename, bool debug){
   file.open(filename, std::ios::binary);
   if (!file) {
     throw std::runtime_error("Failed to open file: " + filename);
@@ -276,34 +275,40 @@ inline void BinaryReader::Open(const std::string& filename){
   if (fileSize < sizeof(GEBHeader)) {
     throw std::runtime_error("File is too small to contain a GEBHeader.");
   }
-  //decode the DigID and fileIndex from the filename
+
+  // filename is expected to be in the format "dgs_runXXX.gtd01_fileIndex_DigID_Channel"
+  //decode the runID, DigID, and fileIndex from the filename
   std::string baseName = filename.substr(filename.find_last_of("/\\") + 1);
+  if( debug ) printf("Opened file: %s\n", baseName.c_str());
   if (baseName.length() >= 6) {
     try {
-
       // find position of "run_" in the filename
-      size_t runPos = baseName.find("run_");
+      size_t runPos = baseName.find("run");
+      size_t runPos2 = baseName.find(".gtd", runPos);
       if (runPos != std::string::npos) {
-        runID = std::stoi(baseName.substr(runPos + 4, 3));
+        runID = std::stoi(baseName.substr(runPos + 3, runPos2 - runPos - 3)); // Extract run ID
       } else {
         runID = 0; // Default value if "run_" is not found
       }
 
-      DigID = std::stoi(baseName.substr(baseName.length() - 3, 3));
-      fileIndex = std::stoi(baseName.substr(baseName.length() - 7, 3));
+      // printf("runID: %d \n", runID);
+
+      size_t fileIndexPos = baseName.find("_", runPos2);      
+      fileIndex = std::stoi(baseName.substr(fileIndexPos + 1, 3));
+      // printf("fileIndex: %d \n", fileIndex);  
+
+      size_t digIDPos = baseName.find("_", fileIndexPos + 4);
+      DigID = std::stoi(baseName.substr(digIDPos + 1, 4));
+      // printf("DigID: %d \n", DigID);
+
+      channel = std::stoi(baseName.substr(baseName.length()-1, 1)); // Extract channel
+
     } catch (const std::invalid_argument & e) {
       throw std::runtime_error("Failed to parse DigID and fileIndex from filename: " + filename);
     }
   } else {
     throw std::runtime_error("Filename is too short to contain DigID and fileIndex: " + filename);
   }
-  // printf("Opened file: %s\n", filename.c_str());
-  // printf("DigID: %03d, fileIndex: %03d\n", DigID, fileIndex);
-  // if (fileSize > 0) {
-  //   printf("File size: %zu bytes\n", fileSize);
-  // } else {
-  //   throw std::runtime_error("File is empty: " + filename); 
-  // }
 }
 
 template <typename T> inline T BinaryReader::Read() {

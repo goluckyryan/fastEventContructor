@@ -38,8 +38,8 @@ inline unsigned int getTime_us(){
 
 // Comparator for min-heap (smallest timestamp on top)
 struct CompareEvent {
-  bool operator()(const Event& a, const Event& b) {
-    return a.timestamp > b.timestamp;
+  bool operator()(const DIG_Hit& a, const DIG_Hit& b) {
+    return a.EVENT_TIMESTAMP > b.EVENT_TIMESTAMP;
   }
 };
   
@@ -74,12 +74,11 @@ int main(int argc, char* argv[]) {
   printf("===          Event Builder  raw data --> root       ===\n");
   printf("=======================================================\n");  
 
-  if( argc <= 3){
-    printf("%s [outfile] [timeWindow] [saveTrace] [sol-1] [sol-2] ... \n", argv[0]);
+  if( argc <= 4){
+    printf("%s [outfile] [timeWindow] [file-1] [file-2] ... \n", argv[0]);
     printf("      outfile : output root file name\n");
     printf("   timeWindow : nano-sec; if < 0, no event build\n"); 
-    printf("    saveTrace : 1 = save trace, 0 = no trace\n");
-    printf("        sol-X : the sol file(s)\n");
+    printf("       file-X : the raw data file(s)\n");
     return -1;
   }
 
@@ -87,12 +86,11 @@ int main(int argc, char* argv[]) {
 
   TString outFileName = argv[1];
   int timeWindow = atoi(argv[2]);
-  const bool saveTrace = atoi(argv[3]);
 
-  const int nFile = argc - 4;
+  const int nFile = argc - 3;
   TString inFileName[nFile];
   for( int i = 0 ; i < nFile ; i++){
-    inFileName[i] = argv[i+4];
+    inFileName[i] = argv[i+3];
   }
 
   printf(" out file : \033[1;33m%s\033[m\n", outFileName.Data());
@@ -101,7 +99,6 @@ int main(int argc, char* argv[]) {
   }else{
     printf(" Event building time window : %d nsec \n", timeWindow);
   }
-  printf(" Save Trace ? %s \n", saveTrace ? "Yes" : "No");
   printf(" Number of input file : %d \n", nFile);
   
   //*=============== setup reader
@@ -134,13 +131,11 @@ int main(int argc, char* argv[]) {
     if (reader[i]->GetGlobalLastTime() > globalLastTime) globalLastTime = reader[i]->GetGlobalLastTime();
 
   }
-
-  //TODO there is potential time not sort for different files from the same DigID....
   
   //*=============== group files by DigID and sort the fileIndex
   std::map<unsigned short, std::vector<BinaryReader*>> fileGroups;
   for( int i = 0 ; i < nFile ; i++){
-    unsigned short digID = reader[i]->GetDigID();
+    unsigned short digID = reader[i]->GetDigID() * 10 + reader[i]->GetChannel(); // Combine DigID and channel to create a unique identifier
     if (!fileGroups.count(digID) ) {
       fileGroups[digID] = std::vector<BinaryReader*>();
     }
@@ -148,7 +143,7 @@ int main(int argc, char* argv[]) {
   }
   // printf("Found %zu DigIDs\n", fileGroups.size());
   
-  // printf out the file groups
+  // // printf out the file groups
   // for( const std::pair<const unsigned short, std::vector<BinaryReader*>>& group : fileGroups) { // looping through the map
   //   unsigned short digID = group.first; // DigID
   //   const auto& readers = group.second; // Vector of BinaryReader pointers
@@ -161,7 +156,7 @@ int main(int argc, char* argv[]) {
   printf("================= Total number of hits: %lu\n", totalNumHits);
   printf("                       Total file size: %.1f MB\n", totFileSize / (1024.0 * 1024.0));
   printf("                        Total Run Time: %.3f s = %.3f min\n", (globalLastTime - globalEarliestTime) / 1e8, (globalLastTime - globalEarliestTime) / 1e8 / 60.0);
-
+  printf("           Total number of file groups: %zu\n", fileGroups.size());
 
 
   //*=============== create output file and setup TTree
@@ -190,17 +185,14 @@ int main(int argc, char* argv[]) {
   outTree->Branch(        "peak_sample",         peak_sample, "peak_sample[NumHits]/i");
   outTree->Branch(        "base_sample",         base_sample, "base_sample[NumHits]/i");
 #endif
-  if( saveTrace ){
-    outTree->Branch("trace_length", traceLen, "trace_length[NumHits]/s");
-    outTree->Branch(       "trace",    trace, Form("trace[NumHits][%d]/s", MAX_TRACE_LEN));
-  } 
+
+  outTree->Print();
 
   //*=============== read n data from each file
-
   std::map<unsigned short, unsigned int> hitID; // store the hit ID for the current reader for each DigID
   std::map<unsigned short, short> fileID; // store the file ID for each DigID
   
-  std::priority_queue<Event, std::vector<Event>, CompareEvent> eventQueue; // Priority queue to store events
+  std::priority_queue<DIG_Hit, std::vector<DIG_Hit>, CompareEvent> hitsQueue; // Priority queue to store events
 
   for( const std::pair<const unsigned short, std::vector<BinaryReader*>>& group : fileGroups) { // looping through the map
     unsigned short digID = group.first; // DigID
@@ -212,12 +204,14 @@ int main(int argc, char* argv[]) {
     BinaryReader* reader = readers[0];
     reader->ReadNextNHitsFromFile();
 
-    for( int i = 0; i < reader->GetHitSize(); i++) eventQueue.push(reader->GetHit(i).DecodePayload(saveTrace)); // Decode the hit payload and push it to the event queue
+    for( int i = 0; i < reader->GetHitSize(); i++) hitsQueue.push(reader->GetHit(i).DecodePayload()); // Decode the hit payload and push it to the event queue
 
   }
 
+  printf("-------- start event building, total %zu file groups, hitQueue has %zu hits\n", fileGroups.size(), hitsQueue.size());
+
   //*=============== event building
-  std::vector<Event> events; // Vector to store events
+  std::vector<DIG_Hit> events; // Vector to store events
   unsigned int eventID = 0;
   
   unsigned int hitProcessed = 0; // Number of hits processed
@@ -227,8 +221,8 @@ int main(int argc, char* argv[]) {
 
     do{
 
-      events.push_back(eventQueue.top()); 
-      int digID = events.back().board; 
+      events.push_back(hitsQueue.top()); 
+      int digID = events.back().USER_DEF; 
       hitID[digID]++;
       hitProcessed ++;
 
@@ -239,7 +233,7 @@ int main(int argc, char* argv[]) {
           reader->ReadNextNHitsFromFile(); // Read more hits from the current file
           if( reader->GetHitSize() > 0 ) {
             hitID[digID] = 0; // Reset hitID for this DigID
-            for( int i = 0; i < reader->GetHitSize(); i++)  eventQueue.push(reader->GetHit(i).DecodePayload(saveTrace)); 
+            for( int i = 0; i < reader->GetHitSize(); i++)  hitsQueue.push(reader->GetHit(i).DecodePayload()); 
           }
         }
 
@@ -251,7 +245,7 @@ int main(int argc, char* argv[]) {
             reader = fileGroups[digID][fileID[digID]];
             reader->ReadNextNHitsFromFile(); // Read more hits from the current file
             hitID[digID] = 0; // Reset hitID for this DigID
-            for( int i = 0; i < reader->GetHitSize(); i++) eventQueue.push(reader->GetHit(i).DecodePayload(saveTrace)); 
+            for( int i = 0; i < reader->GetHitSize(); i++) hitsQueue.push(reader->GetHit(i).DecodePayload()); 
             
           } else {
             fileID[digID] = -1; // Mark that there are no more files for this DigID
@@ -259,21 +253,21 @@ int main(int argc, char* argv[]) {
         }
       }      
 
-      if( timeWindow >= 0 && events.size() > 0 && events.back().timestamp - events.front().timestamp > timeWindow) {
+      if( timeWindow >= 0 && events.size() > 0 && events.back().EVENT_TIMESTAMP - events.front().EVENT_TIMESTAMP > timeWindow) {
         events.pop_back(); // Remove the last event if it exceeds the time window
         hitID[digID]--; // Decrement the hitID for this DigID
         hitProcessed--; // Decrement the hitProcessed count
         break;
       }
 
-      eventQueue.pop();
+      hitsQueue.pop();
       if( timeWindow < 0 ) break;
 
-    }while(!eventQueue.empty()); // Loop until the event queue is empty
+    }while(!hitsQueue.empty()); // Loop until the event queue is empty
 
     if( events.size() > 0 ) {
-      std::sort(events.begin(), events.end(), [](const Event& a, const Event& b) {
-        return a.timestamp < b.timestamp; // Sort events by timestamp
+      std::sort(events.begin(), events.end(), [](const DIG_Hit& a, const DIG_Hit& b) {
+        return a.EVENT_TIMESTAMP < b.EVENT_TIMESTAMP; // Sort events by timestamp
       });
       
       if( events.size() > MAX_MULTI ) {
@@ -284,11 +278,11 @@ int main(int argc, char* argv[]) {
         numHit = events.size(); 
       }
 
-      for( int i = 0; i <  events.size(); i++) {
-        id[i]               = events[i].board * 10 + events[i].channel; // Channel ID
-        pre_rise_energy[i]  = events[i].pre_rise_energy; // Pre-rise energy
-        post_rise_energy[i] = events[i].post_rise_energy; // Post-rise energy
-        timestamp[i]        = events[i].timestamp; // Timestamp
+      for( int i = 0; i < numHit; i++) {
+        id[i]               = events[i].USER_DEF * 10 + events[i].CH_ID; // Channel ID
+        pre_rise_energy[i]  = events[i].PRE_RISE_ENERGY; // Pre-rise energy
+        post_rise_energy[i] = events[i].POST_RISE_ENERGY; // Post-rise energy
+        timestamp[i]        = events[i].EVENT_TIMESTAMP; // Timestamp
 #if FULL_OUTPUT
         baseline[i]            = events[i].baseline; // Baseline value
         geo_addr[i]            = events[i].geo_addr; // Geo address
@@ -302,21 +296,13 @@ int main(int argc, char* argv[]) {
         peak_sample[i]         = events[i].peak_sample; // Peak sample
         base_sample[i]         = events[i].base_sample; // Base sample
 #endif
-        if( saveTrace ){
-          traceLen[i] = events[i].traceLength; // Trace length
-          // if( events.size() > 1 && eventID == 1 ) printf(" %d |%d | Trace length: %d, id %d, timestamp %llu| ", eventID, i, traceLen[i], id[i], timestamp[i]);
-          for( int j = 0 ; j < traceLen[i] && j < MAX_TRACE_LEN; j++){
-            trace[i][j] = events[i].trace[j]; // Trace data
-            // if( events.size() > 1 && eventID == 1) printf(" %d | %d\n", j, trace[i][j]);
-          }
-        }
       }
       outTree->Fill(); // Fill the TTree with the current event
     }
     
     double percentage = hitProcessed * 100/ totalNumHits;
     if( percentage >= last_precentage ) {
-      size_t memoryUsage = sizeof(Event) * eventQueue.size();
+      size_t memoryUsage = sizeof(DIG_Hit) * hitsQueue.size();
       printf("Processed : %u, %.0f%% | %u/%lu | %.3f Mb", eventID, percentage, hitProcessed, totalNumHits, memoryUsage / (1024. * 1024.));
       printf(" \n\033[A\r");
       last_precentage = percentage + 1.0;
@@ -326,7 +312,7 @@ int main(int argc, char* argv[]) {
     eventID ++;
     events.clear(); // Clear the events vector for the next event
 
-  }while(!eventQueue.empty()); 
+  }while(!hitsQueue.empty()); 
 
   //*=============== save some marco
   TMacro macro("info", "Earliest and Last Timestamps");

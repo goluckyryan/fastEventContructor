@@ -1,3 +1,5 @@
 EventBuilder
 data
 
+.vscode
+*.root
