@@ -133,7 +133,7 @@ inline void BinaryReader::Scan(bool quick, bool debug) {
   uint64_t old_timestamp = 0;
   unsigned int timestamp_error_counter = 0;
 
-  unsigned short count = 0;
+  unsigned short count = 0; // count how many time timestampList filled 
   std::vector<uint64_t> timestampList; // Store timestamps for error checking
 
   do{
@@ -153,14 +153,16 @@ inline void BinaryReader::Scan(bool quick, bool debug) {
     if( timestampList.size() >= maxHitSize ){ // check the timestamp error every maxHitSize hits
       std::sort(timestampList.begin(), timestampList.end()); // Sort the timestamps for error checking
       
+      if( count > 0 && timestampList.front() < globalLastTime) {
+        printf("global Last Time : %lu, first timestamp : %lu, increasing maxHitSize to %u\n", globalLastTime, timestampList.front(), maxHitSize);
+        maxHitSize *= 2;
+          // printf("\033[33m=== Increasing maxHitSize to %u due to timestamp not in order. %s \033[0m\n", maxHitSize, fileName.c_str());
+        CreateHits(maxHitSize); // Adjust the hit size to the maximum difference
+      }
+
       if( timestampList.front() < globalEarliestTime) globalEarliestTime = timestampList.front(); // Update the global earliest time
       if( timestampList.back() > globalLastTime) globalLastTime = timestampList.back(); // Update the global last time 
       
-      if( count > 0 && timestampList.front() < old_timestamp) {
-        maxHitSize *= 2;
-        // printf("\033[33m=== Increasing maxHitSize to %u due to timestamp not in order. %s \033[0m\n", maxHitSize, fileName.c_str());
-        CreateHits(maxHitSize); // Adjust the hit size to the maximum difference
-      }
       timestampList.clear(); // Clear the list for the next batch
       count++;
     }
@@ -301,7 +303,7 @@ inline void BinaryReader::Open(const std::string& filename, bool debug){
       DigID = std::stoi(baseName.substr(digIDPos + 1, 4));
       // printf("DigID: %d \n", DigID);
 
-      channel = std::stoi(baseName.substr(baseName.length()-1, 1)); // Extract channel
+      channel = std::stoi(baseName.substr(baseName.length()-1, 1), nullptr, 16); // Extract channel
 
     } catch (const std::invalid_argument & e) {
       throw std::runtime_error("Failed to parse DigID and fileIndex from filename: " + filename);

@@ -21,10 +21,9 @@
 #include <thread>
 #include <vector>
 
-#define MAX_TRACE_LEN 1250 
 #define FULL_OUTPUT false
-#define MAX_MULTI 200
-#define MAX_READ_HITS 100000 // Maximum hits to read at a time
+#define MAX_MULTI 400
+#define MAX_READ_HITS 10000 // Maximum hits to read at a time
 
 #include <sys/time.h> /** struct timeval, select() */
 inline unsigned int getTime_us(){
@@ -49,8 +48,6 @@ unsigned short                   id[MAX_MULTI] = {0};
 unsigned int        pre_rise_energy[MAX_MULTI] = {0};  
 unsigned int       post_rise_energy[MAX_MULTI] = {0};  
 unsigned long long        timestamp[MAX_MULTI] = {0};
-unsigned short             traceLen[MAX_MULTI] = {0};
-unsigned short trace[MAX_MULTI][MAX_TRACE_LEN] = {0};
 
 
 #if FULL_OUTPUT
@@ -186,7 +183,9 @@ int main(int argc, char* argv[]) {
   outTree->Branch(        "base_sample",         base_sample, "base_sample[NumHits]/i");
 #endif
 
-  outTree->Print();
+  printf("...... build tree branches\n");
+
+  printf("...... Filling the initial data to hitsQueue\n");
 
   //*=============== read n data from each file
   std::map<unsigned short, unsigned int> hitID; // store the hit ID for the current reader for each DigID
@@ -208,7 +207,8 @@ int main(int argc, char* argv[]) {
 
   }
 
-  printf("-------- start event building, total %zu file groups, hitQueue has %zu hits\n", fileGroups.size(), hitsQueue.size());
+  printf("...... Initial hitsQueue size: %zu\n", hitsQueue.size());
+  printf("...... Start event buinding\n");
 
   //*=============== event building
   std::vector<DIG_Hit> events; // Vector to store events
@@ -222,7 +222,7 @@ int main(int argc, char* argv[]) {
     do{
 
       events.push_back(hitsQueue.top()); 
-      int digID = events.back().USER_DEF; 
+      int digID = events.back().USER_DEF * 10 + events.back().CH_ID; // Get the DigID from the event
       hitID[digID]++;
       hitProcessed ++;
 
@@ -265,6 +265,7 @@ int main(int argc, char* argv[]) {
 
     }while(!hitsQueue.empty()); // Loop until the event queue is empty
 
+    
     if( events.size() > 0 ) {
       std::sort(events.begin(), events.end(), [](const DIG_Hit& a, const DIG_Hit& b) {
         return a.EVENT_TIMESTAMP < b.EVENT_TIMESTAMP; // Sort events by timestamp
@@ -277,13 +278,13 @@ int main(int argc, char* argv[]) {
       }else{
         numHit = events.size(); 
       }
-
+      
       for( int i = 0; i < numHit; i++) {
         id[i]               = events[i].USER_DEF * 10 + events[i].CH_ID; // Channel ID
         pre_rise_energy[i]  = events[i].PRE_RISE_ENERGY; // Pre-rise energy
         post_rise_energy[i] = events[i].POST_RISE_ENERGY; // Post-rise energy
         timestamp[i]        = events[i].EVENT_TIMESTAMP; // Timestamp
-#if FULL_OUTPUT
+        #if FULL_OUTPUT
         baseline[i]            = events[i].baseline; // Baseline value
         geo_addr[i]            = events[i].geo_addr; // Geo address
         flags[i]               = events[i].flags; // Flags, bit 0 : external disc, bit 1 : peak valid, bit 2 : offset, bit 3 : sync error, bit 4 : general error, bit 5 : pileup only, bit 6 : pileup
@@ -295,17 +296,20 @@ int main(int argc, char* argv[]) {
         m2_end_sample[i]       = events[i].m2_end_sample; // M2 end sample
         peak_sample[i]         = events[i].peak_sample; // Peak sample
         base_sample[i]         = events[i].base_sample; // Base sample
-#endif
+        #endif
       }
       outTree->Fill(); // Fill the TTree with the current event
+      outTree->AutoSave(); // Autosave the TTree
     }
+
+    if( hitProcessed % 10000 == 0 ) printf("hits Queue size: %zu, events size: %zu, hitProcessed: %u\n", hitsQueue.size(), events.size(), hitProcessed);
     
     double percentage = hitProcessed * 100/ totalNumHits;
     if( percentage >= last_precentage ) {
       size_t memoryUsage = sizeof(DIG_Hit) * hitsQueue.size();
       printf("Processed : %u, %.0f%% | %u/%lu | %.3f Mb", eventID, percentage, hitProcessed, totalNumHits, memoryUsage / (1024. * 1024.));
       printf(" \n\033[A\r");
-      last_precentage = percentage + 1.0;
+      last_precentage = percentage + 0.1;
     }
     
     // prepare for the next event
@@ -322,9 +326,6 @@ int main(int argc, char* argv[]) {
   macro.AddLine(Form("totFileSizeMB = %.1f", totFileSize / (1024.0 * 1024.0))); // Convert to MB
   macro.Write("info");
 
-  TMacro macro2("trace_info", "Maximum Trace Length"); //this macro is for read Raw trace
-  macro2.AddLine(Form("%d", MAX_TRACE_LEN));
-  macro2.Write("trace_info");
 
   //*=============== summary
   printf("=======================================================\n");
@@ -337,6 +338,7 @@ int main(int argc, char* argv[]) {
   printf("     Number of entries in tree: %10lld\n", outTree->GetEntries());
   //clean up
   outFile->Write();
+  outTree->Print();
   outFile->Close();
   for( int i = 0 ; i < nFile ; i++){
     delete reader[i]; // Delete each BinaryReader

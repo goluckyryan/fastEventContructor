@@ -1,5 +1,6 @@
 CC=g++
-CFLAG= -std=c++17 -g -O0
+CFLAG= -std=c++17 -O2
+# CFLAG= -std=c++17 -g -O0
 # CFLAG= -std=c++17 -O2 -pthread  -lgsl -lgslcblas -lm
 #ifeq ($(shell uname), Darwin)
 #CFLAG += -w -I/opt/homebrew/opt/gsl/include -L/opt/homebrew/opt/gsl/lib

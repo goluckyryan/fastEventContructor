@@ -16,29 +16,33 @@ struct CompareEvent {
 
 void test(){
   
-  haha.Open("data/dgs_run10/dgs_run10.gtd01_000_0101_1");
+  haha.Open("data/dgs_run116/dgs_run116.gtd10_000_0136_2", true);
 
-  // haha.Scan(false);
+  haha.Scan(true, true);
+
+  printf("Global Earliest Time: %lu\n", haha.GetGlobalEarliestTime());
+  printf("Global Last Time: %lu\n", haha.GetGlobalLastTime());
+  printf("Max Hit Size: %u\n", haha.GetMaxHitSize());
 
   // printf(" hit count: %d \n", haha.GetNumData());
 
-  haha.ReadNextNHitsFromFile(true);
+  // haha.ReadNextNHitsFromFile(true);
 
-  size_t memSize = haha.GetMemoryUsageBytes();
-  printf("Memory %zu bytes = %.3f MB\n", memSize, memSize / (1024.0 * 1024.0));  
+  // size_t memSize = haha.GetMemoryUsageBytes();
+  // printf("Memory %zu bytes = %.3f MB\n", memSize, memSize / (1024.0 * 1024.0));  
 
-  printf(" number of hits: %u \n", haha.GetHitSize());
-
-
-  std::priority_queue<DIG_Hit, std::vector<DIG_Hit>, CompareEvent> hitsQueue; // Priority queue to store events
+  // printf(" number of hits: %u \n", haha.GetHitSize());
 
 
-  for( int i = 0; i < haha.GetHitSize(); i++){
-    hitsQueue.push(haha.GetHit(i).DecodePayload());
-    // printf(" %3d | %lu | %d | %d %d\n", i,   hit.header.timestamp, event.channel, event.pre_rise_energy, event.post_rise_energy);
-  }
+  // std::priority_queue<DIG_Hit, std::vector<DIG_Hit>, CompareEvent> hitsQueue; // Priority queue to store events
 
-  printf(" number of hits: %u \n", haha.GetHitSize());
+
+  // for( int i = 0; i < haha.GetHitSize(); i++){
+  //   hitsQueue.push(haha.GetHit(i).DecodePayload());
+  //   // printf(" %3d | %lu | %d | %d %d\n", i,   hit.header.timestamp, event.channel, event.pre_rise_energy, event.post_rise_energy);
+  // }
+
+  // printf(" number of hits: %u \n", haha.GetHitSize());
 
   // for( int i = 0; i < 1; i++){
   //   DataBlock hit = haha.GetHit(i);

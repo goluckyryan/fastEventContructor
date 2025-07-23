@@ -103,7 +103,7 @@ public:
   unsigned short POST_RISE_ENTER_SAMPLE; //Word 12 (13:0)
   unsigned short POST_RISE_LEAVE_SAMPLE; //Word 12 (29:16)
 
-    void Print(){
+  void Print(){
 
     printf("############################################ DIG_Hit:\n");
     printf("  CH_ID                       : %u\n", CH_ID);
@@ -195,13 +195,64 @@ public:
         DecodeHeader_7_8(raw_header);
         break;
       default:
-        throw std::runtime_error("\033[31mUnknown header type: " + std::to_string(header_type) + "\033[0m");
+        printf("\033[31mUnknown header type: %u\033[0m\n", header_type);
+        Init(); // Reset all fields to default values
+        //throw std::runtime_error("\033[31mUnknown header type: " + std::to_string(header_type) + "\033[0m");
     }
 
 
   }
 
 private:
+
+  void Init(){
+    CH_ID = 0;
+    USER_DEF = 0;
+    PACKET_LENGTH = 0;
+    GEO_ADDR = 0;
+    EVENT_TIMESTAMP = 0;
+    HEADER_TYPE = 0;
+    PEQ_BYPASS = false;
+    TRIG_TS_MODE = false;
+    CFD_ESUM_MODE = false;
+    EVENT_TYPE = 0;
+    HEADER_LENGTH = 0;
+
+    EARLY_PRE_RISE_SELECT = false;
+    WRITE_FLAGS = false;
+    VETO_FLAG = false;
+    EXTERNAL_DISC_FLAG = false;
+    PEAK_VALID_FLAG = false;
+    OFFSET_FLAG = false;
+    PILEUP_ONLY_FLAG = false;
+    PILEUP_FLAG = false;
+
+    SAMPLED_BASELINE = 0;
+    PILEUP_COUNT = 0;
+
+    PRE_RISE_ENERGY = 0;
+    POST_RISE_ENERGY = 0;
+
+    PEAK_TIMESTAMP = 0;
+
+    P2_SUM = 0;
+    P2_MODE = false;
+    CAPTURE_PARST_TS = false;
+    TS_OF_TRIGGER = 0;
+
+    MULTIPLEX_DATA = 0;
+    LAST_POST_RISE_M_SUM = 0;
+
+    EARLY_PRE_RISE_ENERGY = 0;
+
+    SECOND_THRESH_DISC_FLAG = false; 
+    PARST_TSM = false; 
+    COARSE_FIRED = false; 
+    TS_OF_COARSE = 0;
+
+    TRIG_MON_XTRA_DATA = 0; // LED only
+  }
+
   bool ExtractBit(unsigned int value, unsigned int bitPosition) {
     if (bitPosition > 31) {
       return false; // Invalid bit position
