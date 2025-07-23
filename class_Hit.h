@@ -25,10 +25,12 @@ public:
 };
 
 
-class DataBlock {
+class HIT {
 public:
   GEBHeader header;  // Header information
   std::vector<uint32_t> payload;  // Payload data
+
+  unsigned short UniqueID; // Unique ID for the hit, combining DigID and channel
 
   void Print() const {
     header.Print();
@@ -42,10 +44,11 @@ public:
     }
   }
 
-  DIG_Hit DecodePayload(){
-    DIG_Hit digHit;
+  DIG DecodePayload(){
+    DIG digHit;
 
     digHit.DecodeData(payload);
+    digHit.UniqueID = UniqueID; // Set the UniqueID from the argument
 
     return digHit;
   }

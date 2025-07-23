@@ -9,7 +9,7 @@
 BinaryReader haha(1000);
 
 struct CompareEvent {
-  bool operator()(const DIG_Hit& a, const DIG_Hit& b) {
+  bool operator()(const DIG& a, const DIG& b) {
     return a.EVENT_TIMESTAMP > b.EVENT_TIMESTAMP;
   }
 };
@@ -26,7 +26,8 @@ void test(){
 
   // printf(" hit count: %d \n", haha.GetNumData());
 
-  // haha.ReadNextNHitsFromFile(true);
+  haha.ReadNextNHitsFromFile(true);
+
 
   // size_t memSize = haha.GetMemoryUsageBytes();
   // printf("Memory %zu bytes = %.3f MB\n", memSize, memSize / (1024.0 * 1024.0));  
@@ -34,7 +35,7 @@ void test(){
   // printf(" number of hits: %u \n", haha.GetHitSize());
 
 
-  // std::priority_queue<DIG_Hit, std::vector<DIG_Hit>, CompareEvent> hitsQueue; // Priority queue to store events
+  // std::priority_queue<DIG, std::vector<DIG>, CompareEvent> hitsQueue; // Priority queue to store events
 
 
   // for( int i = 0; i < haha.GetHitSize(); i++){
@@ -45,10 +46,10 @@ void test(){
   // printf(" number of hits: %u \n", haha.GetHitSize());
 
   // for( int i = 0; i < 1; i++){
-  //   DataBlock hit = haha.GetHit(i);
+  //   HIT hit = haha.GetHit(i);
   //   hit.Print();
 
-  //   DIG_Hit digHit = hit.DecodePayload();
+  //   DIG digHit = hit.DecodePayload();
 
   //   digHit.Print();
 

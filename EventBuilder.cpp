@@ -23,7 +23,7 @@
 
 #define FULL_OUTPUT false
 #define MAX_MULTI 400
-#define MAX_READ_HITS 10000 // Maximum hits to read at a time
+#define MAX_READ_HITS 100000 // Maximum hits to read at a time
 
 #include <sys/time.h> /** struct timeval, select() */
 inline unsigned int getTime_us(){
@@ -37,7 +37,7 @@ inline unsigned int getTime_us(){
 
 // Comparator for min-heap (smallest timestamp on top)
 struct CompareEvent {
-  bool operator()(const DIG_Hit& a, const DIG_Hit& b) {
+  bool operator()(const DIG& a, const DIG& b) {
     return a.EVENT_TIMESTAMP > b.EVENT_TIMESTAMP;
   }
 };
@@ -132,7 +132,7 @@ int main(int argc, char* argv[]) {
   //*=============== group files by DigID and sort the fileIndex
   std::map<unsigned short, std::vector<BinaryReader*>> fileGroups;
   for( int i = 0 ; i < nFile ; i++){
-    unsigned short digID = reader[i]->GetDigID() * 10 + reader[i]->GetChannel(); // Combine DigID and channel to create a unique identifier
+    unsigned short digID = reader[i]->GetUniqueID(); // Combine DigID and channel to create a unique identifier
     if (!fileGroups.count(digID) ) {
       fileGroups[digID] = std::vector<BinaryReader*>();
     }
@@ -191,7 +191,7 @@ int main(int argc, char* argv[]) {
   std::map<unsigned short, unsigned int> hitID; // store the hit ID for the current reader for each DigID
   std::map<unsigned short, short> fileID; // store the file ID for each DigID
   
-  std::priority_queue<DIG_Hit, std::vector<DIG_Hit>, CompareEvent> hitsQueue; // Priority queue to store events
+  std::priority_queue<DIG, std::vector<DIG>, CompareEvent> hitsQueue; // Priority queue to store events
 
   for( const std::pair<const unsigned short, std::vector<BinaryReader*>>& group : fileGroups) { // looping through the map
     unsigned short digID = group.first; // DigID
@@ -205,82 +205,100 @@ int main(int argc, char* argv[]) {
 
     for( int i = 0; i < reader->GetHitSize(); i++) hitsQueue.push(reader->GetHit(i).DecodePayload()); // Decode the hit payload and push it to the event queue
 
+    if( reader->GetHitSize() == reader->GetNumData() ) {
+      printf("\033[34m====== DigID %03d, file %s has more hits\033[0m\n", digID, reader->GetFileName().c_str());
+      fileID[digID]++; // Increment the file ID for this DigID
+      if( fileID[digID] >= readers.size() ) {
+        fileID[digID] = -1; // Mark that there are no more files for this DigID
+      }
+    }
+
   }
 
   printf("...... Initial hitsQueue size: %zu\n", hitsQueue.size());
   printf("...... Start event buinding\n");
 
   //*=============== event building
-  std::vector<DIG_Hit> events; // Vector to store events
+  std::vector<DIG> events; // Vector to store events
   unsigned int eventID = 0;
   
   unsigned int hitProcessed = 0; // Number of hits processed
   double last_precentage = 0.0; // Last percentage printed
 
+
   do{
 
     do{
 
-      events.push_back(hitsQueue.top()); 
-      int digID = events.back().USER_DEF * 10 + events.back().CH_ID; // Get the DigID from the event
-      hitID[digID]++;
-      hitProcessed ++;
+      DIG hit = hitsQueue.top(); // Get the top event from the priority queue
+      int digID = hit.UniqueID; // Get the DigID from the event
 
       if( fileID[digID] >= 0  ){ // check shoudl read the next N data or next file for this DigID
 
+        // printf("\033[34m====== DigID %03d, file %d, hitID %d\033[0m\n", digID, fileID[digID], hitID[digID]);
+
         BinaryReader* reader = fileGroups[digID][fileID[digID]];
-        if( hitID[digID] >= reader->GetHitSize() ) { // If the hitID exceeds the number of hits in the current file
+        if( hitID[digID] >= reader->GetHitSize() - 1) { // If the hitID exceeds the number of hits in the current file
+
           reader->ReadNextNHitsFromFile(); // Read more hits from the current file
+          
           if( reader->GetHitSize() > 0 ) {
             hitID[digID] = 0; // Reset hitID for this DigID
+            // printf("\033[34m====== DigID %03d, file %s has more hits (%d)\033[0m\n\n", digID, reader->GetFileName().c_str(), reader->GetHitSize());
             for( int i = 0; i < reader->GetHitSize(); i++)  hitsQueue.push(reader->GetHit(i).DecodePayload()); 
-          }
-        }
-
-        if( reader->GetHitSize() == 0 ) { // load next file if no hits
-          if( fileID[digID] < fileGroups[digID].size() - 1 ) {
-            reader->DeleteHits(); // Delete the hits from the current reader, free memory
+          }else{ // load next file if no hits
+  
+            printf("\033[31m====== DigID %03d, file %s has No more hits \033[0m\n", digID, reader->GetFileName().c_str());
             fileID[digID]++;
-            // printf("\033[34m====== No hits in current file for DigID %03d, loading next file...%s\033[0m\n", digID, readers[fileID[digID]]->GetFileName().c_str());
-            reader = fileGroups[digID][fileID[digID]];
-            reader->ReadNextNHitsFromFile(); // Read more hits from the current file
-            hitID[digID] = 0; // Reset hitID for this DigID
-            for( int i = 0; i < reader->GetHitSize(); i++) hitsQueue.push(reader->GetHit(i).DecodePayload()); 
-            
-          } else {
-            fileID[digID] = -1; // Mark that there are no more files for this DigID
+
+            if( fileID[digID] >= fileGroups[digID].size() - 1 ) {
+              fileID[digID] = -1; // Mark that there are no more files for this DigID
+            }else{
+              reader = fileGroups[digID][fileID[digID]];
+              reader->ReadNextNHitsFromFile(); // Read more hits from the current file
+              hitID[digID] = 0; // Reset hitID for this DigID
+              for( int i = 0; i < reader->GetHitSize(); i++) hitsQueue.push(reader->GetHit(i).DecodePayload());   
+            }
+  
           }
         }
-      }      
 
-      if( timeWindow >= 0 && events.size() > 0 && events.back().EVENT_TIMESTAMP - events.front().EVENT_TIMESTAMP > timeWindow) {
-        events.pop_back(); // Remove the last event if it exceeds the time window
-        hitID[digID]--; // Decrement the hitID for this DigID
-        hitProcessed--; // Decrement the hitProcessed count
-        break;
       }
 
-      hitsQueue.pop();
-      if( timeWindow < 0 ) break;
+      if( events.size() == 0 ) {
+        events.push_back(hit); // Add the hit to the events vector
+        hitsQueue.pop();
+        hitProcessed++; // Increment the hitProcessed count
+        hitID[digID]++; // Increment the hitID for this DigID
+        if( timeWindow < 0 ) break;
+      }else{
+        if( hit.EVENT_TIMESTAMP - events.front().EVENT_TIMESTAMP <= timeWindow ) {
+          events.push_back(hit); // Add the hit to the events vector
+          hitsQueue.pop();
+          hitProcessed++; // Increment the hitProcessed count
+          hitID[digID]++; // Increment the hitID for this DigID
+        }else{
+          break;
+        }
+      }
 
     }while(!hitsQueue.empty()); // Loop until the event queue is empty
 
     
     if( events.size() > 0 ) {
-      std::sort(events.begin(), events.end(), [](const DIG_Hit& a, const DIG_Hit& b) {
+      std::sort(events.begin(), events.end(), [](const DIG& a, const DIG& b) {
         return a.EVENT_TIMESTAMP < b.EVENT_TIMESTAMP; // Sort events by timestamp
       });
       
       if( events.size() > MAX_MULTI ) {
         printf("\033[31mWarning: More than %d hits in one event, truncating to %d hits.\033[0m\n", MAX_MULTI, MAX_MULTI);
-        //events.resize(MAX_MULTI); // Truncate to MAX_MULTI hits
         numHit = MAX_MULTI; // Set numHit to MAX_MULTI
       }else{
         numHit = events.size(); 
       }
       
       for( int i = 0; i < numHit; i++) {
-        id[i]               = events[i].USER_DEF * 10 + events[i].CH_ID; // Channel ID
+        id[i]               = events[i].UniqueID; // Unique ID  = DigID * 10 + channel
         pre_rise_energy[i]  = events[i].PRE_RISE_ENERGY; // Pre-rise energy
         post_rise_energy[i] = events[i].POST_RISE_ENERGY; // Post-rise energy
         timestamp[i]        = events[i].EVENT_TIMESTAMP; // Timestamp
@@ -299,15 +317,12 @@ int main(int argc, char* argv[]) {
         #endif
       }
       outTree->Fill(); // Fill the TTree with the current event
-      outTree->AutoSave(); // Autosave the TTree
     }
 
-    if( hitProcessed % 10000 == 0 ) printf("hits Queue size: %zu, events size: %zu, hitProcessed: %u\n", hitsQueue.size(), events.size(), hitProcessed);
-    
-    double percentage = hitProcessed * 100/ totalNumHits;
+    double percentage = hitProcessed * 100./ totalNumHits;
     if( percentage >= last_precentage ) {
-      size_t memoryUsage = sizeof(DIG_Hit) * hitsQueue.size();
-      printf("Processed : %u, %.0f%% | %u/%lu | %.3f Mb", eventID, percentage, hitProcessed, totalNumHits, memoryUsage / (1024. * 1024.));
+      size_t memoryUsage = sizeof(DIG) * hitsQueue.size();
+      printf("Processed : %u, %.1f%% | %u/%lu | (%zu) %.3f Mb", eventID, percentage, hitProcessed, totalNumHits, hitsQueue.size(), memoryUsage / (1024. * 1024.));
       printf(" \n\033[A\r");
       last_precentage = percentage + 0.1;
     }
@@ -328,12 +343,13 @@ int main(int argc, char* argv[]) {
 
 
   //*=============== summary
+  printf("\n\n");
   printf("=======================================================\n");
   printf("===          Event Builder finished                 ===\n");
   printf("=======================================================\n");
   unsigned int runEndTime = getTime_us();
   printf("              Total time taken: %.3f s = %.3f min\n", (runEndTime - runStartTime) / 1000000.0, (runEndTime - runStartTime) / 1000000.0 / 60.0);
-  printf("Total number of hits processed: %10u (%lu)\n", hitProcessed, totalNumHits);
+  printf("Total number of hits processed: %10u (%lu) | %.1f%%\n", hitProcessed, totalNumHits, hitProcessed * 100.0 / totalNumHits);
   printf("  Total number of events built: %10u\n", eventID);
   printf("     Number of entries in tree: %10lld\n", outTree->GetEntries());
   //clean up
@@ -341,6 +357,7 @@ int main(int argc, char* argv[]) {
   outTree->Print();
   outFile->Close();
   for( int i = 0 ; i < nFile ; i++){
+    if( reader[i] == nullptr ) continue; // Skip if reader is null
     delete reader[i]; // Delete each BinaryReader
   }
   delete[] reader; // Delete the array of BinaryReader pointers

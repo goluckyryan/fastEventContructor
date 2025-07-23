@@ -12,9 +12,12 @@
 #include <stdexcept>
 
 
-class DIG_Hit { // for DIG data header type 7 or 8
+class DIG { // for DIG data header type 7 or 8
 public:
   // unsigned int FIXED_AAAAAAAA; //Word 0
+
+  unsigned short UniqueID; // Word 0 (15:0) = DigID * 10 + channel
+
   unsigned int CH_ID;          //Word 1 (3:0)
   unsigned int USER_DEF;       //Word 1 (15:4)
   unsigned int PACKET_LENGTH;  //Word 1 (26:16)
@@ -105,7 +108,7 @@ public:
 
   void Print(){
 
-    printf("############################################ DIG_Hit:\n");
+    printf("############################################ DIG:\n");
     printf("  CH_ID                       : %u\n", CH_ID);
     printf("  USER_DEF                    : %u\n", USER_DEF);
     printf("  PACKET_LENGTH               : %u\n", PACKET_LENGTH);

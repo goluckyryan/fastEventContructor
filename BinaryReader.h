@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <algorithm>
 
-#include "class_DataBlock.h"  
+#include "class_Hit.h"  
 
 class BinaryReader {
 public:
@@ -29,6 +29,7 @@ public:
   unsigned short GetRunID() const { return runID; }  // Get the run ID
   unsigned short GetDigID() const { return DigID; }  // Get the last three digits of the file name
   unsigned short GetChannel() const { return channel; }  // Get the channel number
+  unsigned short GetUniqueID() const { return DigID * 10 + channel; }  // Get a unique ID combining DigID and channel
   unsigned short GetFileIndex() const { return fileIndex; }  // Get the second last three digits of the file name
   size_t GetFileSize() const { return fileSize; }  // Get size of the file in bytes
 
@@ -41,8 +42,8 @@ public:
   size_t Tell() { return static_cast<size_t>(file.tellg()); }  // Get current file position
   void Seek(std::streampos pos) { file.seekg(pos); }   // Seek to position
   
-  void Scan(bool quick = false, bool debug = false);  // Scan the file to count data blocks
-  unsigned int GetNumData() const { return totalNumHits; }  // Get number of data blocks found
+  void Scan(bool quick = false, bool debug = false);  // Scan the file to count data hits
+  unsigned int GetNumData() const { return totalNumHits; }  // Get number of data hits found
   
   void ResetFile() {
     file.clear();  // Clear any error flags
@@ -58,8 +59,8 @@ public:
   void ReadNextNHitsFromFile(bool debug = false); 
   unsigned int GetMaxHitSize() const { return maxHitSize; }  // Get the maximum size of the hits vector
   unsigned int GetHitSize() const { return hitSize; }  // Get the size of the hits vector
-  const DataBlock * GetHits() const { return hits; }  // Get vector of hits
-  DataBlock GetHit(unsigned int index) const {
+  const HIT * GetHits() const { return hits; }  // Get vector of hits
+  HIT GetHit(unsigned int index) const {
     if (index < maxHitSize) {
       return hits[index];  // Return the hit at the specified index
     } else {
@@ -71,7 +72,7 @@ public:
     if (hits != nullptr) {
       delete[] hits;  // Delete the existing hits array
     }
-    hits = new DataBlock[size];  // Create a new hits array with the specified size
+    hits = new HIT[size];  // Create a new hits array with the specified size
     maxHitSize = size;  // Update the maximum hit size
     hitSize = 0;  // Reset hit size
   }
@@ -99,9 +100,9 @@ private:
   unsigned int totalNumHits;
   unsigned int hitID; // current hit ID
 
-  // std::vector<DataBlock> hits; // Vector to store hits
+  // std::vector<HIT> hits; // Vector to store hits
 
-  DataBlock * hits;
+  HIT * hits;
   unsigned int maxHitSize; // Size of the hits array
   unsigned int hitSize; // Number of hits read from the file
   uint64_t lastTimestampOfHits; // Last timestamp of hits read from the file
@@ -126,7 +127,8 @@ private:
 
 inline void BinaryReader::Scan(bool quick, bool debug) {
 
-  DataBlock hit;
+  HIT hit;
+  hit.UniqueID = GetUniqueID();
   totalNumHits = 0;
   unsigned filePos = 0; // byte
   uint32_t type = 0;
@@ -188,7 +190,7 @@ inline void BinaryReader::Scan(bool quick, bool debug) {
   if( timestampList.front() < globalEarliestTime) globalEarliestTime = timestampList.front(); // Update the global earliest time
   if( timestampList.back() > globalLastTime) globalLastTime = timestampList.back(); // Update the global last time  
 
-  if( debug ) printf("number of DataBlock Found : %d \n", totalNumHits);
+  if( debug ) printf("number of HIT Found : %d \n", totalNumHits);
   if( timestamp_error_counter > 0 && debug) printf("%s : timestamp error found for %u times.\n", fileName.c_str(), timestamp_error_counter);
 
   file.seekg(0, std::ios::beg);
@@ -217,6 +219,9 @@ inline void BinaryReader::ReadNextNHitsFromFile(bool debug) {
     if (hits[i].header.payload_lenght_byte > 0) {
       hits[i].payload = ReadArray<uint32_t>(hits[i].header.payload_lenght_byte / sizeof(uint32_t));
     }
+
+    hits[i].UniqueID = GetUniqueID(); // Set the UniqueID for the hit
+
     hitSize++;  // Increment hit size for each hit read
     hitID ++;  // Update the hitID to the next position
   }
@@ -226,7 +231,7 @@ inline void BinaryReader::ReadNextNHitsFromFile(bool debug) {
     if( debug ) printf("timestamp error found for %u times. Sort data.\n", timestamp_error_counter);
 
     //sort the hits by timestamp
-    std::sort(hits, hits + hitSize, [](const DataBlock& a, const DataBlock& b) {
+    std::sort(hits, hits + hitSize, [](const HIT& a, const HIT& b) {
       return a.header.timestamp < b.header.timestamp;
     });
 
@@ -238,6 +243,12 @@ inline void BinaryReader::ReadNextNHitsFromFile(bool debug) {
     }
 
     lastTimestampOfHits = hits[hitSize - 1].header.timestamp; // Update the last timestamp of hits
+  }
+
+  if( hitSize == 0 ){
+    if( debug ) printf("No hits read from file: %s\n", fileName.c_str());
+    delete [] hits; // Delete the hits array if no hits were read
+    hits = nullptr; // Set hits to nullptr
   }
 
 
@@ -255,7 +266,7 @@ inline void BinaryReader::ReadNextNHitsFromFile(bool debug) {
 
 inline size_t BinaryReader::GetMemoryUsageBytes() {
   size_t total = sizeof(BinaryReader);
-  total += maxHitSize * sizeof(DataBlock);
+  total += maxHitSize * sizeof(HIT);
   for (int i = 0; i < maxHitSize; ++i) {
       total += sizeof(GEBHeader);
       total += hits[i].payload.capacity() * sizeof(uint32_t);
