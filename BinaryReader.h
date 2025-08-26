@@ -294,6 +294,30 @@ inline void BinaryReader::Open(const std::string& filename, bool debug){
   std::string baseName = filename.substr(filename.find_last_of("/\\") + 1);
   if( debug ) printf("Opened file: %s\n", baseName.c_str());
   if (baseName.length() >= 6) {
+
+    ///for data format like expName_XXX_YYY_ZZZZ_C
+    try {
+      // find position of "run_" in the filename
+      size_t runPos2 = baseName.find("_");
+      runID = std::stoi(baseName.substr(runPos2 + 1, 3));
+      // printf("runID: %d \n", runID);
+
+      size_t fileIndexPos = baseName.find("_", runPos2 + 4);      
+      fileIndex = std::stoi(baseName.substr(fileIndexPos + 1, 3));
+      // printf("fileIndex: %d \n", fileIndex);  
+
+      size_t digIDPos = baseName.find("_", fileIndexPos + 4);
+      DigID = std::stoi(baseName.substr(digIDPos + 1, 4));
+      // printf("DigID: %d \n", DigID);
+
+      channel = std::stoi(baseName.substr(baseName.length()-1, 1), nullptr, 16); // Extract channel
+
+    } catch (const std::invalid_argument & e) {
+      throw std::runtime_error("Failed to parse DigID and fileIndex from filename: " + filename);
+    }
+
+    /*
+    ///for data format like runXXX.gtd01_YYY_ZZZZ_C
     try {
       // find position of "run_" in the filename
       size_t runPos = baseName.find("run");
@@ -319,6 +343,7 @@ inline void BinaryReader::Open(const std::string& filename, bool debug){
     } catch (const std::invalid_argument & e) {
       throw std::runtime_error("Failed to parse DigID and fileIndex from filename: " + filename);
     }
+    */
   } else {
     throw std::runtime_error("Filename is too short to contain DigID and fileIndex: " + filename);
   }
