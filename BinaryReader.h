@@ -6,7 +6,8 @@
 #include <stdexcept>
 #include <algorithm>
 
-#include "class_Hit.h"  
+#include "class_Hit.h" 
+#include "class_TDC.h"
 
 class BinaryReader {
 public:
@@ -29,7 +30,7 @@ public:
   unsigned short GetRunID() const { return runID; }  // Get the run ID
   unsigned short GetDigID() const { return DigID; }  // Get the last three digits of the file name
   unsigned short GetChannel() const { return channel; }  // Get the channel number
-  unsigned short GetUniqueID() const { return DigID * 10 + channel; }  // Get a unique ID combining DigID and channel
+  unsigned short GetUniqueID() const { return DigID * 100 + channel; }  // Get a unique ID combining DigID and channel
   unsigned short GetFileIndex() const { return fileIndex; }  // Get the second last three digits of the file name
   size_t GetFileSize() const { return fileSize; }  // Get size of the file in bytes
 
@@ -139,19 +140,33 @@ inline void BinaryReader::Scan(bool quick, bool debug) {
   std::vector<uint64_t> timestampList; // Store timestamps for error checking
 
   do{
-    hit.header = Read<GEBHeader>();
-    if( totalNumHits == 0) type = hit.header.type;
-    
-    // printf("Data ID : %d \n", totalNumHits);
-    // header.Print();
-    
-    if( hit.header.type != type) {
-      printf("header error at Data ID : %d \n", totalNumHits);
-      break;
+    if( channel < 10 ){ //^=========== for digitizer data
+      hit.gebHeader = Read<GEBHeader>();
+      if( totalNumHits == 0) type = hit.gebHeader.type;
+      
+      // printf("Data ID : %d \n", totalNumHits);
+      // gebHeader.Print();
+      
+      if( hit.gebHeader.type != type) {
+        printf("gebHeader error at Data ID : %d \n", totalNumHits);
+        break;
+      }
+
+    }else{ //^=========== for TDC data
+      
+      hit.payload = ReadArray<uint32_t>(10); // Read 10 words (40 bytes) for TDC data      
+      if( hit.payload.size() < 10 ) break; // Break if less than 10 words are read (end of file)
+      
+      if( hit.payload[0] != 0xAAAAAAAA ) {
+        printf("gebHeader error at Data ID : %d \n", totalNumHits);
+        break;
+      }
+      
+      hit.ConstructGEBHeaderTimestampFromTACPayload();      
     }
 
-    timestampList.push_back(hit.header.timestamp); 
- 
+    timestampList.push_back(hit.gebHeader.timestamp); 
+
     if( timestampList.size() >= maxHitSize ){ // check the timestamp error every maxHitSize hits
       std::sort(timestampList.begin(), timestampList.end()); // Sort the timestamps for error checking
       
@@ -169,23 +184,26 @@ inline void BinaryReader::Scan(bool quick, bool debug) {
       count++;
     }
 
-    if( hit.header.timestamp < old_timestamp) {
+    if( hit.gebHeader.timestamp < old_timestamp) {
       if( debug ) printf("timestamp error at Data ID : %d \n", totalNumHits);
       if( debug ) printf("old timestamp : %16lu \n", old_timestamp);
-      if( debug ) printf("new timestamp : %16lu \n", hit.header.timestamp);
+      if( debug ) printf("new timestamp : %16lu \n", hit.gebHeader.timestamp);
       timestamp_error_counter ++;
     }
-    old_timestamp = hit.header.timestamp;
-    
-    if( quick ) {
-      file.seekg( hit.header.payload_lenght_byte, std::ios::cur );
-    }else {
-      hit.payload = ReadArray<uint32_t>(hit.header.payload_lenght_byte / sizeof(uint32_t));
+    old_timestamp = hit.gebHeader.timestamp;
+
+    if( channel < 10 ){ //^=========== for digitizer data
+      if( quick ) {
+        file.seekg( hit.gebHeader.payload_lenght_byte, std::ios::cur );
+      }else {
+        hit.payload = ReadArray<uint32_t>(hit.gebHeader.payload_lenght_byte / sizeof(uint32_t));
+      }
     }
 
     totalNumHits ++;
   }while(Tell() < fileSize);
 
+ 
   std::sort(timestampList.begin(), timestampList.end()); // Sort the timestamps for error checking
   if( timestampList.front() < globalEarliestTime) globalEarliestTime = timestampList.front(); // Update the global earliest time
   if( timestampList.back() > globalLastTime) globalLastTime = timestampList.back(); // Update the global last time  
@@ -204,20 +222,27 @@ inline void BinaryReader::ReadNextNHitsFromFile(bool debug) {
   uint64_t old_timestamp = 0;
   unsigned int timestamp_error_counter = 0;
   hitSize = 0; // Reset hit size before reading new hits
+  
   for (unsigned int i = 0; i < maxHitSize && Tell() < fileSize; ++i) {
-    hits[i].header = Read<GEBHeader>();
 
-    if( hits[i].header.timestamp < old_timestamp) {
-      if( debug ) printf("timestamp error at Data ID : %d \n", i);
-      if( debug ) printf("old timestamp : %16lu \n", old_timestamp);
-      if( debug ) printf("new timestamp : %16lu \n", hits[i].header.timestamp);
-      timestamp_error_counter++;
-    }
-    old_timestamp = hits[i].header.timestamp;
+    if( channel < 10 ){
+      hits[i].gebHeader = Read<GEBHeader>();
 
+      if( hits[i].gebHeader.timestamp < old_timestamp) {
+        if( debug ) printf("timestamp error at Data ID : %d \n", i);
+        if( debug ) printf("old timestamp : %16lu \n", old_timestamp);
+        if( debug ) printf("new timestamp : %16lu \n", hits[i].gebHeader.timestamp);
+        timestamp_error_counter++;
+      }
+      old_timestamp = hits[i].gebHeader.timestamp;
 
-    if (hits[i].header.payload_lenght_byte > 0) {
-      hits[i].payload = ReadArray<uint32_t>(hits[i].header.payload_lenght_byte / sizeof(uint32_t));
+      if (hits[i].gebHeader.payload_lenght_byte > 0) {
+        hits[i].payload = ReadArray<uint32_t>(hits[i].gebHeader.payload_lenght_byte / sizeof(uint32_t));
+      }
+
+    }else{
+      hits[i].payload = ReadArray<uint32_t>(10); // Read 10 words (40 bytes) for TDC data
+      hits[i].ConstructGEBHeaderTimestampFromTACPayload();
     }
 
     hits[i].UniqueID = GetUniqueID(); // Set the UniqueID for the hit
@@ -232,17 +257,17 @@ inline void BinaryReader::ReadNextNHitsFromFile(bool debug) {
 
     //sort the hits by timestamp
     std::sort(hits, hits + hitSize, [](const HIT& a, const HIT& b) {
-      return a.header.timestamp < b.header.timestamp;
+      return a.gebHeader.timestamp < b.gebHeader.timestamp;
     });
 
-    uint64_t firstTimestamp = hits[0].header.timestamp; // First timestamp of hits
+    uint64_t firstTimestamp = hits[0].gebHeader.timestamp; // First timestamp of hits
     if( firstTimestamp < lastTimestampOfHits){
       printf("\033[33m=== In file: %s \033[0m\n", fileName.c_str());
       printf("\033[31mWarning: First timestamp (%lu) of this read is less than the last timestamp (%lu) of the last read. \033[0m\n", 
              firstTimestamp, lastTimestampOfHits);
     }
 
-    lastTimestampOfHits = hits[hitSize - 1].header.timestamp; // Update the last timestamp of hits
+    lastTimestampOfHits = hits[hitSize - 1].gebHeader.timestamp; // Update the last timestamp of hits
   }
 
   if( hitSize == 0 ){
@@ -257,8 +282,8 @@ inline void BinaryReader::ReadNextNHitsFromFile(bool debug) {
       printf(" No hits to read\n");
     }else{
       printf(" first timestamp: %lu, last timestamp: %lu, hits read: %u\n", 
-          hits[0].header.timestamp, 
-          hits[maxHitSize-1].header.timestamp, 
+          hits[0].gebHeader.timestamp, 
+          hits[maxHitSize-1].gebHeader.timestamp, 
           hitSize);
     }
   }
@@ -295,55 +320,63 @@ inline void BinaryReader::Open(const std::string& filename, bool debug){
   if( debug ) printf("Opened file: %s\n", baseName.c_str());
   if (baseName.length() >= 6) {
 
-    ///for data format like expName_XXX_YYY_ZZZZ_C
-    try {
-      // find position of "run_" in the filename
-      size_t runPos2 = baseName.find("_");
-      runID = std::stoi(baseName.substr(runPos2 + 1, 3));
-      // printf("runID: %d \n", runID);
+    //check if the filename contains gtd
+    if( baseName.find("gtd") == std::string::npos ) {
+            
+      ///for data format like expName_XXX_YYY_ZZZZ_C
+      try {
+        size_t runPos2 = baseName.find("_");
+        runID = std::stoi(baseName.substr(runPos2 + 1, 3));
+        // printf("runID: %d \n", runID);
+        
+        size_t fileIndexPos = baseName.find("_", runPos2 + 4);      
+        fileIndex = std::stoi(baseName.substr(fileIndexPos + 1, 3));
+        // printf("fileIndex: %d \n", fileIndex);  
+        
+        size_t digIDPos = baseName.find("_", fileIndexPos + 4);
+        DigID = std::stoi(baseName.substr(digIDPos + 1, 4));
+        // printf("DigID: %d \n", DigID);
+        
+        std::string chStr = baseName.substr(baseName.length()-1, 1); // the last character is channel
+        // printf("chStr: %s \n", chStr.c_str());
+        if ( chStr == "T" ){
+          channel = 20;
+        }else{
+          channel = std::stoi(chStr, nullptr, 16); // Extract channel
+        }
 
-      size_t fileIndexPos = baseName.find("_", runPos2 + 4);      
-      fileIndex = std::stoi(baseName.substr(fileIndexPos + 1, 3));
-      // printf("fileIndex: %d \n", fileIndex);  
-
-      size_t digIDPos = baseName.find("_", fileIndexPos + 4);
-      DigID = std::stoi(baseName.substr(digIDPos + 1, 4));
-      // printf("DigID: %d \n", DigID);
-
-      channel = std::stoi(baseName.substr(baseName.length()-1, 1), nullptr, 16); // Extract channel
-
-    } catch (const std::invalid_argument & e) {
-      throw std::runtime_error("Failed to parse DigID and fileIndex from filename: " + filename);
-    }
-
-    /*
-    ///for data format like runXXX.gtd01_YYY_ZZZZ_C
-    try {
-      // find position of "run_" in the filename
-      size_t runPos = baseName.find("run");
-      size_t runPos2 = baseName.find(".gtd", runPos);
-      if (runPos != std::string::npos) {
-        runID = std::stoi(baseName.substr(runPos + 3, runPos2 - runPos - 3)); // Extract run ID
-      } else {
-        runID = 0; // Default value if "run_" is not found
+      } catch (const std::invalid_argument & e) {
+        throw std::runtime_error("Failed to parse DigID and fileIndex from filename: " + filename);
       }
 
-      // printf("runID: %d \n", runID);
+    }else{
+      ///for data format like runXXX.gtd01_YYY_ZZZZ_C
+      try {
+        // find position of "run_" in the filename
+        size_t runPos = baseName.find("run");
+        size_t runPos2 = baseName.find(".gtd", runPos);
+        if (runPos != std::string::npos) {
+          runID = std::stoi(baseName.substr(runPos + 3, runPos2 - runPos - 3)); // Extract run ID
+        } else {
+          runID = 0; // Default value if "run_" is not found
+        }
 
-      size_t fileIndexPos = baseName.find("_", runPos2);      
-      fileIndex = std::stoi(baseName.substr(fileIndexPos + 1, 3));
-      // printf("fileIndex: %d \n", fileIndex);  
+        // printf("runID: %d \n", runID);
 
-      size_t digIDPos = baseName.find("_", fileIndexPos + 4);
-      DigID = std::stoi(baseName.substr(digIDPos + 1, 4));
-      // printf("DigID: %d \n", DigID);
+        size_t fileIndexPos = baseName.find("_", runPos2);      
+        fileIndex = std::stoi(baseName.substr(fileIndexPos + 1, 3));
+        // printf("fileIndex: %d \n", fileIndex);  
 
-      channel = std::stoi(baseName.substr(baseName.length()-1, 1), nullptr, 16); // Extract channel
+        size_t digIDPos = baseName.find("_", fileIndexPos + 4);
+        DigID = std::stoi(baseName.substr(digIDPos + 1, 4));
+        // printf("DigID: %d \n", DigID);
 
-    } catch (const std::invalid_argument & e) {
-      throw std::runtime_error("Failed to parse DigID and fileIndex from filename: " + filename);
+        channel = std::stoi(baseName.substr(baseName.length()-1, 1), nullptr, 16); // Extract channel
+
+      } catch (const std::invalid_argument & e) {
+        throw std::runtime_error("Failed to parse DigID and fileIndex from filename: " + filename);
+      }
     }
-    */
   } else {
     throw std::runtime_error("Filename is too short to contain DigID and fileIndex: " + filename);
   }

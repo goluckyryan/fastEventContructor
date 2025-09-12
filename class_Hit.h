@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 
 #include "class_DIG.h"
+#include "class_TDC.h"
 
 class GEBHeader{
 public:
@@ -27,28 +28,58 @@ public:
 
 class HIT {
 public:
-  GEBHeader header;  // Header information
+  GEBHeader gebHeader;  // Header information
   std::vector<uint32_t> payload;  // Payload data
-
-  unsigned short UniqueID; // Unique ID for the hit, combining DigID and channel
+  unsigned short UniqueID; // Unique ID for the hit, DigID * 100 + channel, from BinaryReader
 
   void Print() const {
-    header.Print();
+    gebHeader.Print();
     printf("  Payload size: %zu words\n", payload.size());
     unsigned short header_type   = (ntohl(payload[2]) >> 16) & 0xF; // for data type
     uint16_t packet_length = (ntohl(payload[0]) >> 16) & 0x7FF;
-    printf("  header type : %u\n", header_type);
+    printf("  gebHeader type : %u\n", header_type);
     printf("packet length : %u words\n", packet_length);
     for (size_t i = 0; i < payload.size(); ++i) {
       printf("%3zu: 0x%08X\n", i, ntohl(payload[i]));
     }
   }
 
+  void ConstructGEBHeaderTimestampFromTACPayload(){
+    gebHeader.type = 99; // TDC data type
+    gebHeader.timestamp = (static_cast<uint64_t>(ntohl(payload[3] & 0x0000FFFF)) << 32) + ntohl(payload[2]);
+  } 
+
   DIG DecodePayload(){
     DIG digHit;
 
-    digHit.DecodeData(payload);
     digHit.UniqueID = UniqueID; // Set the UniqueID from the argument
+
+    
+    if( gebHeader.type == 99 ){
+      TDC tdcHit;
+      tdcHit.DecodePackedData(payload);
+
+      // fill teh digHit with TDC data
+      digHit.CH_ID = 99;
+      digHit.USER_DEF = 99;
+      digHit.HEADER_TYPE = 99;
+      digHit.EVENT_TYPE = tdcHit.trigType;
+
+      double tdc_avg_time = tdcHit.avgPhaseTime; // in ns
+
+      digHit.EVENT_TIMESTAMP = static_cast<uint64_t>(tdc_avg_time / 10.0); // in 10 ns unit
+      digHit.PRE_RISE_ENERGY = static_cast<uint32_t>((tdc_avg_time - (digHit.EVENT_TIMESTAMP * 10)) * 1000); 
+
+      // printf(" tdc_avg_time: %.3f ns, EVENT_TIMESTAMP: %lu, PRE_RISE_ENERGY: %u \n", tdc_avg_time, digHit.EVENT_TIMESTAMP, digHit.PRE_RISE_ENERGY);
+
+    }else{
+      digHit.DecodeData(payload);
+    }
+
+    // if( (ntohl(payload[2]) >> 16) & 0xF > 8 ){
+    //   printf(" Decoded DIG data for UniqueID: %u\n", UniqueID);
+    //   for( int i  = 0; i < payload.size(); i++) printf("  payload[%2d] = 0x%08X\n", i, ntohl(payload[i]));
+    // }
 
     return digHit;
   }

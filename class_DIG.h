@@ -11,12 +11,15 @@
 #include <arpa/inet.h>
 #include <stdexcept>
 
+#include "class_TDC.h"
 
 class DIG { // for DIG data header type 7 or 8
 public:
+  DIG() {Init();}
+
   // unsigned int FIXED_AAAAAAAA; //Word 0
 
-  unsigned short UniqueID; // Word 0 (15:0) = DigID * 10 + channel
+  unsigned short UniqueID; // Word 0 (15:0) = DigID * 100 + channel
 
   unsigned int CH_ID;          //Word 1 (3:0)
   unsigned int USER_DEF;       //Word 1 (15:4)
@@ -73,9 +76,9 @@ public:
   bool TIMESTAMP_MATCH_FLAG;  //Word 4 (bit 7, only when in CFD mode)
   bool CFD_VALID_FLAG;        //Word 4 (bit 11, only when in CFD mode) 
   
-  short int CFD_SAMPLE_0;  //Word 5 (29:16), CFD mode only  
-  short int CFD_SAMPLE_1;  //Word 7,(13:0,CFD mode only) (Invalid in LED mode)
-  short int CFD_SAMPLE_2;  //Word 7,(29:16,CFD mode only) (Invalid in LED mode)
+  short CFD_SAMPLE_0;  //Word 5 (29:16), CFD mode only  
+  short CFD_SAMPLE_1;  //Word 7,(13:0,CFD mode only) (Invalid in LED mode)
+  short CFD_SAMPLE_2;  //Word 7,(29:16,CFD mode only) (Invalid in LED mode)
 
   bool PREVIOUS_CFD_VALID;      //Word 13(12)
   
@@ -105,6 +108,10 @@ public:
   bool PU_TIME_ERROR; //Word 4 (bit 4)
   unsigned short POST_RISE_ENTER_SAMPLE; //Word 12 (13:0)
   unsigned short POST_RISE_LEAVE_SAMPLE; //Word 12 (29:16)
+
+  void Clear(){
+    Init();
+  }
 
   void Print(){
 
@@ -178,6 +185,7 @@ public:
     unsigned short header_type   = (ntohl(payload[2]) >> 16) & 0xF; // for data type
 
     unsigned int raw_header[14];
+    // raw_header[0] = 0xAAAAAAAA; // Fixed value
     for( int i = 0; i < 13; i++) raw_header[i+1] = ntohl(payload[i]);
 
     switch(header_type) {
@@ -254,6 +262,30 @@ private:
     TS_OF_COARSE = 0;
 
     TRIG_MON_XTRA_DATA = 0; // LED only
+
+    UniqueID = 0;
+
+    CFD_SAMPLE_0 = 0;
+    CFD_SAMPLE_1 = 0;
+    CFD_SAMPLE_2 = 0;
+    
+    PU_TIME_ERROR = false;
+    POST_RISE_ENTER_SAMPLE = 0;
+    POST_RISE_LEAVE_SAMPLE = 0;
+    TS_of_Trigger = 0;
+    LAST_POST_RISE_SAMPLE2 = 0;
+    POST_RISE_SAMPLE = 0;
+    LAST_POST_RISE_SAMPLE = 0;
+    PRE_RISE_ENTER_SAMPLE = 0;
+    PRE_RISE_LEAVE_SAMPLE = 0;
+    SYNC_ERROR_FLAG = false;
+    GENERAL_ERROR_FLAG = false;
+    M1_BEGIN_SAMPLE = 0;
+    M1_END_SAMPLE = 0;
+    M2_BEGIN_SAMPLE = 0;
+    M2_END_SAMPLE = 0;
+    PEAK_SAMPLE = 0;
+    BASE_SAMPLE = 0;
   }
 
   bool ExtractBit(unsigned int value, unsigned int bitPosition) {
@@ -620,6 +652,11 @@ private:
       CFD_SAMPLE_2   = ((Raw_Header[7] & 0x3FFF0000) >> 16);//Word 7 (29:16) are CFD_SAMPLE_2.
       PILEUP_COUNT   = ((Raw_Header[7] & 0xC0000000) >> 28)//Word 7 (31:30) => (03:02) of value; 
                      | ((Raw_Header[7] & 0x0000C000) >> 14);//Word 7 (13:14) => (01:00) of value; 
+
+      //convert CFD_sample to signed short
+      if (CFD_SAMPLE_0 & 0x2000) CFD_SAMPLE_0 |= 0xC000;
+      if (CFD_SAMPLE_1 & 0x2000) CFD_SAMPLE_1 |= 0xC000;
+      if (CFD_SAMPLE_2 & 0x2000) CFD_SAMPLE_2 |= 0xC000;
       
     }
 

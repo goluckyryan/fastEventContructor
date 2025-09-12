@@ -49,6 +49,9 @@ unsigned int        pre_rise_energy[MAX_MULTI] = {0};
 unsigned int       post_rise_energy[MAX_MULTI] = {0};  
 unsigned long long        timestamp[MAX_MULTI] = {0};
 
+short    CFD_sample_0[MAX_MULTI] = {0};  
+short    CFD_sample_1[MAX_MULTI] = {0};  
+short    CFD_sample_2[MAX_MULTI] = {0};
 
 #if FULL_OUTPUT
   uint32_t                      baseline[MAX_MULTI] = {0};
@@ -169,6 +172,11 @@ int main(int argc, char* argv[]) {
   outTree->Branch( "pre_rise_energy",  pre_rise_energy, "pre_rise_energy[NumHits]/i");
   outTree->Branch("post_rise_energy", post_rise_energy, "post_rise_energy[NumHits]/i");
   outTree->Branch( "event_timestamp",        timestamp, "event_timestamp[NumHits]/l");
+
+  outTree->Branch(      "CFD_sample_0",       CFD_sample_0, "CFD_sample_0[NumHits]/S");  
+  outTree->Branch(      "CFD_sample_1",       CFD_sample_1, "CFD_sample_1[NumHits]/S");  
+  outTree->Branch(      "CFD_sample_2",       CFD_sample_2, "CFD_sample_2[NumHits]/S");
+
 #if FULL_OUTPUT
   outTree->Branch(           "baseline",            baseline, "baseline[NumHits]/i");
   outTree->Branch(           "geo_addr",            geo_addr, "geo_addr[NumHits]/s");
@@ -206,10 +214,11 @@ int main(int argc, char* argv[]) {
     for( int i = 0; i < reader->GetHitSize(); i++) hitsQueue.push(reader->GetHit(i).DecodePayload()); // Decode the hit payload and push it to the event queue
 
     if( reader->GetHitSize() == reader->GetNumData() ) {
-      printf("\033[34m====== DigID %03d, file %s has more hits\033[0m\n", digID, reader->GetFileName().c_str());
       fileID[digID]++; // Increment the file ID for this DigID
       if( fileID[digID] >= readers.size() ) {
         fileID[digID] = -1; // Mark that there are no more files for this DigID
+      }else{
+        printf("\033[34m====== DigID %03d, file %s done, read next file\033[0m\n", digID, reader->GetFileName().c_str()); 
       }
     }
 
@@ -298,10 +307,15 @@ int main(int argc, char* argv[]) {
       }
       
       for( int i = 0; i < numHit; i++) {
-        id[i]               = events[i].UniqueID; // Unique ID  = DigID * 10 + channel
+        id[i]               = events[i].UniqueID; // Unique ID  = DigID * 100 + channel
         pre_rise_energy[i]  = events[i].PRE_RISE_ENERGY; // Pre-rise energy
         post_rise_energy[i] = events[i].POST_RISE_ENERGY; // Post-rise energy
         timestamp[i]        = events[i].EVENT_TIMESTAMP; // Timestamp
+
+        CFD_sample_0[i]     = events[i].CFD_SAMPLE_0;  
+        CFD_sample_1[i]     = events[i].CFD_SAMPLE_1;  
+        CFD_sample_2[i]     = events[i].CFD_SAMPLE_2;
+
         #if FULL_OUTPUT
         baseline[i]            = events[i].baseline; // Baseline value
         geo_addr[i]            = events[i].geo_addr; // Geo address
