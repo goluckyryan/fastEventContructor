@@ -13,7 +13,7 @@
 
 double ZeroCrossing(std::vector<std::pair<double, double>> points){
 
-  if(points.size() < 2 || points.size() > 3) return -2; // not enough points to find zero crossing
+  if(points.size() < 2 || points.size() > 3) return TMath::QuietNaN(); // not enough points to find zero crossing
 
   if( points.size() == 3){ 
     
@@ -48,7 +48,7 @@ double ZeroCrossing(std::vector<std::pair<double, double>> points){
 
   }
 
-  return -1;
+  return TMath::QuietNaN();
 
 };
 
@@ -91,17 +91,17 @@ void analyzer(){
 
         std::vector<std::pair<double, double>> points;
 
-        points.push_back( std::make_pair(  0, CFD_sample_0[hit]) );
-        points.push_back( std::make_pair( 10, CFD_sample_1[hit]) );
-        points.push_back( std::make_pair( 20, CFD_sample_2[hit]) );
+        points.push_back( std::make_pair(    0.0, CFD_sample_0[hit]) );
+        points.push_back( std::make_pair(  -10.0, CFD_sample_1[hit]) );
+        points.push_back( std::make_pair(  -20.0, CFD_sample_2[hit]) );
 
         double zeroCross = ZeroCrossing(points);
 
-        if(zeroCross < 0 ) continue;
+        if(TMath::IsNaN(zeroCross)) continue;
 
         double offset = 0;
 
-        time0 = eventTimestamp[hit] * 10  - zeroCross ; // in ns
+        time0 = eventTimestamp[hit] * 10  + zeroCross ; // in ns
 
         // printf("Entry: %d, Hit: %d, ID: %d, PreRiseEnergy: %u, PostRiseEnergy: %u, Timestamp: %llu, ZeroCrossing: %.2f ns\n", 
         //         entry, hit, id[hit], preRiseEnergy[hit], postRiseEnergy[hit], eventTimestamp[hit], zeroCross);
