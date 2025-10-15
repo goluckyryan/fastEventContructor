@@ -1,0 +1,35 @@
+#!/bin/bash -l
+
+expName="haha"
+timeWin=1000
+
+# Ensure a run number is provided
+if [ -z "$1" ]; then
+    echo "Usage: $0 <run_number>"
+    exit 1
+fi
+
+RUN=$(printf "%03d" "$1")
+
+echo "################ Process Run-${RUN}"
+
+dataPattern="data/${expName}_${RUN}*"
+outFileName="root_data/${expName}_${RUN}.root"
+
+inputFiles=$(ls -1 ${dataPattern} 2>/dev/null)
+
+if [ -z "$inputFiles" ]; then
+    echo "No data files found for pattern: ${dataPattern}"
+    exit 1
+fi
+
+if [ ! -f "${outFileName}" ] || find ${dataPattern} -newer "${outFileName}" | grep -q .; then
+    echo "Running EventBuilder to generate: ${outFileName}"
+    ./EventBuilder "${outFileName}" "${timeWin}" ${inputFiles}
+else
+    echo "Skipping EventBuilder; ${outFileName} is up to date."
+fi
+
+echo "################################"
+
+root 'analyzer.cpp("'${outFileName}'")'

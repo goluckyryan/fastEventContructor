@@ -52,9 +52,9 @@ double ZeroCrossing(std::vector<std::pair<double, double>> points){
 
 };
 
-void analyzer(){
+void analyzer(TString rootFileName){
 
-  TFile * inFile = TFile::Open("test.root", "READ");
+  TFile * inFile = TFile::Open(rootFileName, "READ");
 
   TTree * tree = (TTree*) inFile->Get("tree");
 
