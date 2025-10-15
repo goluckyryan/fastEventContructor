@@ -74,7 +74,7 @@ int main(int argc, char* argv[]) {
   printf("===          Event Builder  raw data --> root       ===\n");
   printf("=======================================================\n");  
 
-  if( argc <= 4){
+  if( argc < 4){
     printf("%s [outfile] [timeWindow] [file-1] [file-2] ... \n", argv[0]);
     printf("      outfile : output root file name\n");
     printf("   timeWindow : nano-sec; if < 0, no event build\n"); 
