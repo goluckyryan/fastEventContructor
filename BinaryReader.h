@@ -139,10 +139,22 @@ inline void BinaryReader::Scan(bool quick, bool debug) {
   unsigned short count = 0; // count how many time timestampList filled 
   std::vector<uint64_t> timestampList; // Store timestamps for error checking
 
+
   do{
     if( channel < 10 ){ //^=========== for digitizer data
       hit.gebHeader = Read<GEBHeader>();
       if( totalNumHits == 0) type = hit.gebHeader.type;
+
+      // if( debug && 131487 < totalNumHits && totalNumHits < 131491 ) {
+      //   printf("=============== event %u\n", totalNumHits);
+      //   hit.gebHeader.Print();
+
+      //   file.seekg(-static_cast<std::streamoff>(sizeof(GEBHeader)), std::ios::cur);
+      //   uint32_t buffer[4];
+      //   file.read(reinterpret_cast<char*>(buffer), sizeof(buffer));
+      //   printf("0x%08X\n0x%08X\n0x%08X\n0x%08X\n", buffer[0], buffer[1], buffer[2], buffer[3]);
+
+      // }
       
       // printf("Data ID : %d \n", totalNumHits);
       // gebHeader.Print();
@@ -194,7 +206,19 @@ inline void BinaryReader::Scan(bool quick, bool debug) {
 
     if( channel < 10 ){ //^=========== for digitizer data
       if( quick ) {
+        
+        // if( debug && 131487 < totalNumHits && totalNumHits < 131491 ){
+        //   hit.payload = ReadArray<uint32_t>(hit.gebHeader.payload_lenght_byte / sizeof(uint32_t));
+        //   printf("  Payload size: %zu words\n", hit.payload.size());
+        //   for (size_t i = 0; i < hit.payload.size(); ++i) {
+        //     printf("%3zu: 0x%08X\n", i, ntohl(hit.payload[i]));
+        //   }
+        // }else{
+        // file.seekg( hit.gebHeader.payload_lenght_byte, std::ios::cur );
+        // }
+
         file.seekg( hit.gebHeader.payload_lenght_byte, std::ios::cur );
+          
       }else {
         hit.payload = ReadArray<uint32_t>(hit.gebHeader.payload_lenght_byte / sizeof(uint32_t));
       }
@@ -227,6 +251,7 @@ inline void BinaryReader::ReadNextNHitsFromFile(bool debug) {
 
     if( channel < 10 ){
       hits[i].gebHeader = Read<GEBHeader>();
+      if( debug ) hits[i].gebHeader.Print();
 
       if( hits[i].gebHeader.timestamp < old_timestamp) {
         if( debug ) printf("timestamp error at Data ID : %d \n", i);

@@ -16,7 +16,8 @@ struct CompareEvent {
 
 void test(){
   
-  haha.Open("data/dgs_run116/dgs_run116.gtd10_000_0136_2", true);
+  // haha.Open("data/dgs_run116/dgs_run116.gtd10_000_0136_2", true);
+  haha.Open("data/haha_006_000_0109_9", true);
 
   haha.Scan(true, true);
 
@@ -26,7 +27,13 @@ void test(){
 
   // printf(" hit count: %d \n", haha.GetNumData());
 
-  haha.ReadNextNHitsFromFile(true);
+  // haha.ReadNextNHitsFromFile(true);
+
+  // haha.ReadNextNHitsFromFile(false);
+  // haha.ReadNextNHitsFromFile(false);
+  // haha.ReadNextNHitsFromFile(true);
+  // haha.ReadNextNHitsFromFile(true);
+  // haha.ReadNextNHitsFromFile(true);
 
 
   // size_t memSize = haha.GetMemoryUsageBytes();
