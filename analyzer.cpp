@@ -10,6 +10,7 @@
 #include "TLegend.h"
 #include "TMath.h"
 
+const float MWIN = 350.;
 
 double ZeroCrossing(std::vector<std::pair<double, double>> points){
 
@@ -71,8 +72,9 @@ void analyzer(TString rootFileName){
   const int nEntries = tree->GetEntries();
   printf("Total number of entries: %d\n", nEntries);
 
-
   TH1F * hTimeDiff = new TH1F("hTimeDiff", "Time Difference between Channel 7 and Channel 20; Time Difference (ns); Counts", 100, 2880, 2890);
+
+  TH1F * he = new TH1F("he", "Energy", 400, 1000, 2200);
 
   //loop over all entries
   for( int entry = 0; entry < nEntries ; entry++ ){
@@ -86,6 +88,10 @@ void analyzer(TString rootFileName){
       short board = id[hit] / 100;
       short channel = id[hit] % 100;
 
+      float energy = (postRiseEnergy[hit] - preRiseEnergy[hit] )/ MWIN;
+      if( board == 113 and channel == 9){
+        he->Fill(energy);
+      }
 
       if( channel == 7 ){
 
@@ -108,7 +114,7 @@ void analyzer(TString rootFileName){
 
       }
 
-      if( channel == 20 ){
+      if( board == 99 and channel == 20 ){
         timeTAC = eventTimestamp[hit] * 10  + preRiseEnergy[hit] / 1000; // in ns
       }
       
@@ -120,6 +126,10 @@ void analyzer(TString rootFileName){
 
   gStyle->SetOptStat(111111);
 
-  hTimeDiff->Draw();
+  TCanvas * canvas = new TCanvas("canvas", "Semi-Online analysis", 1000, 500);
+  canvas->Divide(2, 1);
+
+  canvas->cd(1); hTimeDiff->Draw();
+  canvas->cd(2); he->Draw();
 
 }

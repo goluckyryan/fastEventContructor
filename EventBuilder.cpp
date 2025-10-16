@@ -155,6 +155,8 @@ int main(int argc, char* argv[]) {
   
   printf("================= Total number of hits: %lu\n", totalNumHits);
   printf("                       Total file size: %.1f MB\n", totFileSize / (1024.0 * 1024.0));
+  printf("                          Eariest Time: %llu x 10 ns\n", globalEarliestTime);
+  printf("                           Latest Time: %llu x 10 ns\n", globalLastTime);
   printf("                        Total Run Time: %.3f s = %.3f min\n", (globalLastTime - globalEarliestTime) / 1e8, (globalLastTime - globalEarliestTime) / 1e8 / 60.0);
   printf("           Total number of file groups: %zu\n", fileGroups.size());
 
