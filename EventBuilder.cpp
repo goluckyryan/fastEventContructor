@@ -8,6 +8,7 @@
 ****************************************/
 
 #include "BinaryReader.h"
+#include "misc.h"
 
 #include "TFile.h"
 #include "TTree.h"
@@ -45,6 +46,7 @@ struct CompareEvent {
 //unsigned long long                        evID = 0;
 unsigned int                            numHit = 0;
 unsigned short                   id[MAX_MULTI] = {0}; 
+unsigned short                detID[MAX_MULTI] = {0}; 
 unsigned int        pre_rise_energy[MAX_MULTI] = {0};  
 unsigned int       post_rise_energy[MAX_MULTI] = {0};  
 unsigned long long        timestamp[MAX_MULTI] = {0};
@@ -81,6 +83,8 @@ int main(int argc, char* argv[]) {
     printf("       file-X : the raw data file(s)\n");
     return -1;
   }
+
+  LoadChannelMapFromFile();
 
   unsigned int runStartTime = getTime_us();
 
@@ -171,6 +175,7 @@ int main(int argc, char* argv[]) {
 
   outTree->Branch(         "NumHits",          &numHit, "NumHits/i");
   outTree->Branch(              "id",               id, "id[NumHits]/s");
+  outTree->Branch(           "detID",            detID, "detID[NumHits]/s");
   outTree->Branch( "pre_rise_energy",  pre_rise_energy, "pre_rise_energy[NumHits]/i");
   outTree->Branch("post_rise_energy", post_rise_energy, "post_rise_energy[NumHits]/i");
   outTree->Branch( "event_timestamp",        timestamp, "event_timestamp[NumHits]/l");
@@ -310,6 +315,10 @@ int main(int argc, char* argv[]) {
       
       for( int i = 0; i < numHit; i++) {
         id[i]               = events[i].UniqueID; // Unique ID  = DigID * 100 + channel
+
+        unsigned short boardID = id[i]/100;
+        unsigned short channel = id[i]%100;
+        detID[i]            = channelMap[boardID][channel]; // Detector ID from channel map
         pre_rise_energy[i]  = events[i].PRE_RISE_ENERGY; // Pre-rise energy
         post_rise_energy[i] = events[i].POST_RISE_ENERGY; // Post-rise energy
         timestamp[i]        = events[i].EVENT_TIMESTAMP; // Timestamp

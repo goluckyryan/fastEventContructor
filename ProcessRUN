@@ -5,11 +5,17 @@ timeWin=1000
 
 # Ensure a run number is provided
 if [ -z "$1" ]; then
-    echo "Usage: $0 <run_number>"
+    echo "Usage: $0 <run_number> [--force]"
     exit 1
 fi
 
 RUN=$(printf "%03d" "$1")
+
+# Check for --force argument
+FORCE=0
+if [ "$2" == "--force" ]; then
+    FORCE=1
+fi
 
 echo "################ Process Run-${RUN}"
 
@@ -23,7 +29,7 @@ if [ -z "$inputFiles" ]; then
     exit 1
 fi
 
-if [ ! -f "${outFileName}" ] || find ${dataPattern} -newer "${outFileName}" | grep -q .; then
+if [ $FORCE -eq 1 ] || [ ! -f "${outFileName}" ] || find ${dataPattern} -newer "${outFileName}" | grep -q .; then
     echo "Running EventBuilder to generate: ${outFileName}"
     ./EventBuilder "${outFileName}" "${timeWin}" ${inputFiles}
 else

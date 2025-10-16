@@ -13,7 +13,7 @@ pINCLUDE = $(shell pkg-config --cflags arrow parquet)
 all: EventBuilder
 #all: EventBuilder EventBuilder_MT
 
-EventBuilder: EventBuilder.cpp BinaryReader.h class_Hit.h class_DIG.h class_TDC.h
+EventBuilder: EventBuilder.cpp BinaryReader.h class_Hit.h class_DIG.h class_TDC.h misc.h
 	$(CC) $(CFLAG) EventBuilder.cpp -o EventBuilder ${ROOTFLAG}
 
 # EventBuilder_MT: EventBuilder_MT.cpp BinaryReader.h class_Hit.h class_DIG.h

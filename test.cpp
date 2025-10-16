@@ -5,6 +5,7 @@
 
 #include <queue>
 #include "class_DIG.h"
+#include "misc.h"
 
 BinaryReader haha(1000);
 
@@ -15,6 +16,13 @@ struct CompareEvent {
 };
 
 void test(){
+
+  LoadChannelMapFromFile();
+
+  return;
+
+
+
   
   // haha.Open("data/dgs_run116/dgs_run116.gtd10_000_0136_2", true);
   haha.Open("data/haha_008_000_0099_T", true);
