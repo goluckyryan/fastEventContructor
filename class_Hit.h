@@ -35,18 +35,28 @@ public:
   void Print() const {
     gebHeader.Print();
     printf("  Payload size: %zu words\n", payload.size());
-    unsigned short header_type   = (ntohl(payload[2]) >> 16) & 0xF; // for data type
-    uint16_t packet_length = (ntohl(payload[0]) >> 16) & 0x7FF;
-    printf("  gebHeader type : %u\n", header_type);
-    printf("packet length : %u words\n", packet_length);
-    for (size_t i = 0; i < payload.size(); ++i) {
-      printf("%3zu: 0x%08X\n", i, ntohl(payload[i]));
+
+    if (gebHeader.type != 99){
+      unsigned short header_type   = (ntohl(payload[2]) >> 16) & 0xF; // for data type
+      uint16_t packet_length = (ntohl(payload[0]) >> 16) & 0x7FF;
+      printf("  gebHeader type : %u\n", header_type);
+      printf("packet length : %u words\n", packet_length);
+      for (size_t i = 0; i < payload.size(); ++i) {
+        printf("%3zu: 0x%08X\n", i, ntohl(payload[i]));
+      }
+    }else{
+      for (size_t i = 0; i < payload.size(); ++i) {
+        printf("%3zu: 0x%08X\n", i, payload[i]);
+      }
     }
   }
 
   void ConstructGEBHeaderTimestampFromTACPayload(){
     gebHeader.type = 99; // TDC data type
-    gebHeader.timestamp = (static_cast<uint64_t>(ntohl(payload[3] & 0x0000FFFF)) << 32) + ntohl(payload[2]);
+    gebHeader.payload_lenght_byte = 40; // 10 words
+    gebHeader.timestamp = (static_cast<uint64_t>(payload[3] & 0x0000FFFF) << 32) + payload[2];
+    // gebHeader.Print();
+    // Print();
   } 
 
   DIG DecodePayload(){

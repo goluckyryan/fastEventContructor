@@ -17,17 +17,21 @@ struct CompareEvent {
 void test(){
   
   // haha.Open("data/dgs_run116/dgs_run116.gtd10_000_0136_2", true);
-  haha.Open("data/haha_006_000_0109_9", true);
+  haha.Open("data/haha_008_000_0099_T", true);
+  
+  // haha.ReadNextNHitsFromFile(false);
+  // haha.ReadNextNHitsFromFile(false);
+  // haha.ReadNextNHitsFromFile(false);
+  // haha.GetHit(0).Print();
+  // haha.GetHit(1).Print();
 
   haha.Scan(true, true);
-
   printf("Global Earliest Time: %lu\n", haha.GetGlobalEarliestTime());
   printf("Global Last Time: %lu\n", haha.GetGlobalLastTime());
   printf("Max Hit Size: %u\n", haha.GetMaxHitSize());
 
   // printf(" hit count: %d \n", haha.GetNumData());
 
-  // haha.ReadNextNHitsFromFile(true);
 
   // haha.ReadNextNHitsFromFile(false);
   // haha.ReadNextNHitsFromFile(false);
