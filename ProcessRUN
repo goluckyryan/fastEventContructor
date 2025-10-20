@@ -5,16 +5,21 @@ timeWin=1000
 
 # Ensure a run number is provided
 if [ -z "$1" ]; then
-    echo "Usage: $0 <run_number> [--force]"
+    echo "Usage: $0 <run_number> [BUILD] [ANALYSIS]"
     exit 1
 fi
 
 RUN=$(printf "%03d" "$1")
 
-# Check for --force argument
-FORCE=0
-if [ "$2" == "--force" ]; then
-    FORCE=1
+# Check for --BUILD argument
+BUILD=1
+if [ -n "$2" ]; then
+    BUILD=$2
+fi
+
+ANALYSIS=1
+if [ -n "$3" ]; then
+    ANALYSIS=$3
 fi
 
 echo "################ Process Run-${RUN}"
@@ -29,7 +34,7 @@ if [ -z "$inputFiles" ]; then
     exit 1
 fi
 
-if [ $FORCE -eq 1 ] || [ ! -f "${outFileName}" ] || find ${dataPattern} -newer "${outFileName}" | grep -q .; then
+if [ $BUILD -lt 1 ] || [ ! -f "${outFileName}" ] || find ${dataPattern} -newer "${outFileName}" | grep -q .; then
     echo "Running EventBuilder to generate: ${outFileName}"
     ./EventBuilder "${outFileName}" "${timeWin}" ${inputFiles}
 else
@@ -38,4 +43,9 @@ fi
 
 echo "################################"
 
-root 'analyzer.cpp("'${outFileName}'")'
+if [ $ANALYSIS -ge 1 ]; then
+    echo "Running analyzer on: ${outFileName}"
+    root 'analyzer.cpp("'${outFileName}'")'
+else
+    echo "Skipping analysis step."
+fi  

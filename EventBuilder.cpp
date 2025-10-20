@@ -131,9 +131,10 @@ int main(int argc, char* argv[]) {
     totalNumHits += reader[i]->GetNumData();
     totFileSize += reader[i]->GetFileSize();
 
-    if (reader[i]->GetGlobalEarliestTime() < globalEarliestTime) globalEarliestTime = reader[i]->GetGlobalEarliestTime();    
-    if (reader[i]->GetGlobalLastTime() > globalLastTime) globalLastTime = reader[i]->GetGlobalLastTime();
-
+    if (reader[i]->GetChannel() < 10) { //only check time for digitizer data, not TAC data
+      if (reader[i]->GetGlobalEarliestTime() < globalEarliestTime) globalEarliestTime = reader[i]->GetGlobalEarliestTime();    
+      if (reader[i]->GetGlobalLastTime() > globalLastTime) globalLastTime = reader[i]->GetGlobalLastTime();
+    }
   }
   
   //*=============== group files by DigID and sort the fileIndex
@@ -314,11 +315,16 @@ int main(int argc, char* argv[]) {
       }
       
       for( int i = 0; i < numHit; i++) {
-        id[i]               = events[i].UniqueID; // Unique ID  = DigID * 100 + channel
+        id[i] = events[i].UniqueID; // Unique ID  = DigID * 100 + channel
 
         unsigned short boardID = id[i]/100;
         unsigned short channel = id[i]%100;
-        detID[i]            = channelMap[boardID][channel]; // Detector ID from channel map
+        detID[i] = channelMap[boardID][channel];
+        if (boardID == 99 && channel == 20) {
+          detID[i] = 999; // TAC channel set to detID 0
+        }
+        // printf("boardID: %hu, channel: %hu, detID: %hu\n", boardID, channel, detID[i]);
+
         pre_rise_energy[i]  = events[i].PRE_RISE_ENERGY; // Pre-rise energy
         post_rise_energy[i] = events[i].POST_RISE_ENERGY; // Post-rise energy
         timestamp[i]        = events[i].EVENT_TIMESTAMP; // Timestamp
