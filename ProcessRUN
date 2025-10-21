@@ -24,7 +24,7 @@ fi
 
 echo "################ Process Run-${RUN}"
 
-dataPattern="data/${expName}_${RUN}*"
+dataPattern="data/${expName}_${RUN}/${expName}_${RUN}*"
 outFileName="root_data/${expName}_${RUN}.root"
 
 inputFiles=$(ls -1 ${dataPattern} 2>/dev/null)

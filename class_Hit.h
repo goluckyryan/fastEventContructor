@@ -77,7 +77,12 @@ public:
 
       double tdc_avg_time = tdcHit.avgPhaseTime; // in ns
 
+      //TODO to add offset correction here if needed
+      uint64_t offset = 0; // in 10 ns unit
+
       digHit.EVENT_TIMESTAMP = static_cast<uint64_t>(tdc_avg_time / 10.0); // in 10 ns unit
+      digHit.EVENT_TIMESTAMP += offset;
+
       digHit.PRE_RISE_ENERGY = static_cast<uint32_t>((tdc_avg_time - (digHit.EVENT_TIMESTAMP * 10)) * 1000); 
 
       // printf(" tdc_avg_time: %.3f ns, EVENT_TIMESTAMP: %lu, PRE_RISE_ENERGY: %u \n", tdc_avg_time, digHit.EVENT_TIMESTAMP, digHit.PRE_RISE_ENERGY);
