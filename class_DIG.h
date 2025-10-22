@@ -109,6 +109,10 @@ public:
   unsigned short POST_RISE_ENTER_SAMPLE; //Word 12 (13:0)
   unsigned short POST_RISE_LEAVE_SAMPLE; //Word 12 (29:16)
 
+
+  //---- trace data
+  std::vector<uint16_t> traceData; // waveform trace data
+
   void Clear(){
     Init();
   }
@@ -176,11 +180,27 @@ public:
     printf("  LAST_POST_RISE_M_SUM        : %u\n", LAST_POST_RISE_M_SUM);
     printf("  EARLY_PRE_RISE_ENERGY       : %u\n", EARLY_PRE_RISE_ENERGY);
     
+    printf("-------------------------------------------\n");
+    printf("  trace data samples          : %zu samples\n", traceData.size());
+    printf("  Can use PrintTraceData() to see the trace samples.\n");
     printf("============================================\n");
 
   }
 
-  void DecodeData(std::vector<uint32_t> payload){
+  void PrintTraceData() {
+    printf("Trace Data (%zu samples):\n", traceData.size());
+    for (size_t i = 0; i < traceData.size(); ++i) {
+      printf("%5u ", traceData[i]);
+      if ((i + 1) % 16 == 0) {
+        printf("\n");
+      }
+    }
+    if (traceData.size() % 16 != 0) {
+      printf("\n");
+    }
+  }  
+
+  void DecodeData(std::vector<uint32_t> payload, bool withTrace = false){
 
     unsigned short header_type   = (ntohl(payload[2]) >> 16) & 0xF; // for data type
 
@@ -211,7 +231,20 @@ public:
         //throw std::runtime_error("\033[31mUnknown header type: " + std::to_string(header_type) + "\033[0m");
     }
 
-
+    // decode the trace
+    if( withTrace ) {
+      size_t trace_start_index = 14; // trace data starts after the first 14 words
+      size_t num_trace_words = PACKET_LENGTH - trace_start_index;
+      traceData.clear();
+      for( size_t i = 0; i < num_trace_words; i++) {
+        uint32_t word = ntohl(payload[trace_start_index + i]);
+        // Each word contains two 14-bit samples
+        uint16_t sample1 = (word >> 16) & 0x3FFF;
+        uint16_t sample2 = word & 0x3FFF;
+        traceData.push_back(sample1);
+        traceData.push_back(sample2);
+      }
+    }
   }
 
 private:
@@ -286,6 +319,8 @@ private:
     M2_END_SAMPLE = 0;
     PEAK_SAMPLE = 0;
     BASE_SAMPLE = 0;
+
+    traceData.clear();
   }
 
   bool ExtractBit(unsigned int value, unsigned int bitPosition) {

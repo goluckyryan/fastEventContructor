@@ -25,6 +25,7 @@ public:
   }
 };
 
+#define TRASH_DATA 666
 
 class HIT {
 public:
@@ -59,15 +60,20 @@ public:
     // Print();
   } 
 
-  DIG DecodePayload(){
+  DIG DecodePayload(bool withTrace = false) {
     DIG digHit;
 
     digHit.UniqueID = UniqueID; // Set the UniqueID from the argument
 
-    
     if( gebHeader.type == 99 ){
       TDC tdcHit;
       tdcHit.DecodePackedData(payload);
+
+      if( tdcHit.isTrashData ) {
+        // printf(" Trash TDC data found for UniqueID: %u\n", UniqueID);
+        digHit.HEADER_TYPE = TRASH_DATA;
+        return digHit; // return empty digHit
+      }
 
       // fill teh digHit with TDC data
       digHit.CH_ID = 99;
@@ -88,7 +94,7 @@ public:
       // printf(" tdc_avg_time: %.3f ns, EVENT_TIMESTAMP: %lu, PRE_RISE_ENERGY: %u \n", tdc_avg_time, digHit.EVENT_TIMESTAMP, digHit.PRE_RISE_ENERGY);
 
     }else{
-      digHit.DecodeData(payload);
+      digHit.DecodeData(payload, withTrace);
     }
 
     // if( (ntohl(payload[2]) >> 16) & 0xF > 8 ){

@@ -32,6 +32,8 @@ public:
   double phaseTime[4];
   double avgPhaseTime;
 
+  bool isTrashData = false;
+
   std::vector<uint32_t> payload;
   int offset[4] = {0, 1, 2, 3};
 
@@ -99,6 +101,11 @@ public:
 
     // vernierAB = payload[9] >> 16;
     // vernierCD = payload[9] & 0xFFFF;
+
+    if( packedData[9] == 0x10021001 ) {
+      isTrashData = true;
+      return;
+    }
 
     TransformPackedDataToPayload(packedData);
     DecodePayload(payload);

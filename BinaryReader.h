@@ -54,8 +54,8 @@ public:
     lastTimestampOfHits = 0;  // Reset last timestamp of hits
   }
 
-  uint64_t GetGlobalEarliestTime() const { return globalEarliestTime; }  
-  uint64_t GetGlobalLastTime() const { return globalLastTime; } 
+  uint64_t GetGlobalEarliestTime() const { return globalEarliestTime; }  // in 10 ns
+  uint64_t GetGlobalLastTime() const { return globalLastTime; } // in 10 ns
 
   void ReadNextNHitsFromFile(bool debug = false); 
   unsigned int GetMaxHitSize() const { return maxHitSize; }  // Get the maximum size of the hits vector
@@ -174,7 +174,7 @@ inline void BinaryReader::Scan(bool quick, bool debug) {
         break;
       }
       
-      hit.ConstructGEBHeaderTimestampFromTACPayload();      
+      hit.ConstructGEBHeaderTimestampFromTACPayload(); 
     }
 
     timestampList.push_back(hit.gebHeader.timestamp); 
@@ -201,6 +201,7 @@ inline void BinaryReader::Scan(bool quick, bool debug) {
       if( debug ) printf("old timestamp : %16lu \n", old_timestamp);
       if( debug ) printf("new timestamp : %16lu \n", hit.gebHeader.timestamp);
       timestamp_error_counter ++;
+      // hit.Print();
     }
     old_timestamp = hit.gebHeader.timestamp;
 
@@ -232,7 +233,7 @@ inline void BinaryReader::Scan(bool quick, bool debug) {
   if( timestampList.front() < globalEarliestTime) globalEarliestTime = timestampList.front(); // Update the global earliest time
   if( timestampList.back() > globalLastTime) globalLastTime = timestampList.back(); // Update the global last time  
 
-  if( debug ) printf("number of HIT Found : %d \n", totalNumHits);
+  if( debug ) printf(" number of HIT Found: %d \n", totalNumHits);
   if( timestamp_error_counter > 0 && debug) printf("%s : timestamp error found for %u times.\n", fileName.c_str(), timestamp_error_counter);
 
   file.seekg(0, std::ios::beg);
