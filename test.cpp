@@ -7,6 +7,8 @@
 #include "class_DIG.h"
 #include "misc.h"
 
+#include "readTrace_S.C"
+
 BinaryReader haha(1000);
 
 struct CompareEvent {
@@ -17,26 +19,33 @@ struct CompareEvent {
 
 void test(){
 
-  LoadChannelMapFromFile();
+  // LoadChannelMapFromFile();
+  // return;
+
+  readRawTrace("test.root");
 
   return;
 
 
-
-  
   // haha.Open("data/dgs_run116/dgs_run116.gtd10_000_0136_2", true);
-  haha.Open("data/haha_008_000_0099_T", true);
+  haha.Open("data/haha_004/haha_004_000_0099_T", true);
   
   // haha.ReadNextNHitsFromFile(false);
-  // haha.ReadNextNHitsFromFile(false);
-  // haha.ReadNextNHitsFromFile(false);
-  // haha.GetHit(0).Print();
+  // // haha.ReadNextNHitsFromFile(false);
+  // // haha.ReadNextNHitsFromFile(false);
+  // HIT hit = haha.GetHit(0);
+  // DIG dig = hit.DecodePayload(true);
+  // dig.Print();
+  // dig.PrintTraceData();
+
   // haha.GetHit(1).Print();
 
-  haha.Scan(true, true);
-  printf("Global Earliest Time: %lu\n", haha.GetGlobalEarliestTime());
-  printf("Global Last Time: %lu\n", haha.GetGlobalLastTime());
-  printf("Max Hit Size: %u\n", haha.GetMaxHitSize());
+  haha.Scan(true, false);
+  printf("           File Size: %.3f Mbytes\n", haha.GetFileSize()/1024./1024.);
+  printf("Global Earliest Time: %lu x 10 ns\n", haha.GetGlobalEarliestTime());
+  printf("    Global Last Time: %lu x 10 ns\n", haha.GetGlobalLastTime());
+  printf("           time span: %.3f sec\n", (haha.GetGlobalLastTime() - haha.GetGlobalEarliestTime()) * 10. /1e9);
+  printf(" Max Hit Size Needed: %u\n", haha.GetMaxHitSize());
 
   // printf(" hit count: %d \n", haha.GetNumData());
 
