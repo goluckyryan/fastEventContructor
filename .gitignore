@@ -7,3 +7,4 @@ data*
 *.root
 
 GS_channel_map.txt
+analyzer_cpp*

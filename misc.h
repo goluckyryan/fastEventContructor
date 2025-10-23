@@ -23,8 +23,8 @@ void LoadChannelMapFromFile(){
   }
   // Skip the first 2 rows
   char skipLine[256];
-  fgets(skipLine, sizeof(skipLine), f);
-  fgets(skipLine, sizeof(skipLine), f);
+  char * dummy = fgets(skipLine, sizeof(skipLine), f);
+  dummy = fgets(skipLine, sizeof(skipLine), f);
 
   unsigned short detID, digID, chID;
   int VME, board;

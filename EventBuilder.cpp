@@ -39,7 +39,9 @@ inline unsigned int getTime_us(){
 // Comparator for min-heap (smallest timestamp on top)
 struct CompareEvent {
   bool operator()(const DIG& a, const DIG& b) {
-    return a.EVENT_TIMESTAMP > b.EVENT_TIMESTAMP;
+    // return a.EVENT_TIMESTAMP > b.EVENT_TIMESTAMP;
+    return a.TS_OF_TRIGGER_FULL > b.TS_OF_TRIGGER_FULL;
+
   }
 };
   
@@ -50,6 +52,7 @@ unsigned short                detID[MAX_MULTI] = {0};
 unsigned int        pre_rise_energy[MAX_MULTI] = {0};  
 unsigned int       post_rise_energy[MAX_MULTI] = {0};  
 unsigned long long        timestamp[MAX_MULTI] = {0};
+unsigned long long           trigTS[MAX_MULTI] = {0};
 
 short    CFD_sample_0[MAX_MULTI] = {0};  
 short    CFD_sample_1[MAX_MULTI] = {0};  
@@ -180,6 +183,7 @@ int main(int argc, char* argv[]) {
   outTree->Branch( "pre_rise_energy",  pre_rise_energy, "pre_rise_energy[NumHits]/i");
   outTree->Branch("post_rise_energy", post_rise_energy, "post_rise_energy[NumHits]/i");
   outTree->Branch( "event_timestamp",        timestamp, "event_timestamp[NumHits]/l");
+  outTree->Branch(          "trigTS",           trigTS, "trigTS[NumHits]/l");
 
   outTree->Branch(      "CFD_sample_0",       CFD_sample_0, "CFD_sample_0[NumHits]/S");  
   outTree->Branch(      "CFD_sample_1",       CFD_sample_1, "CFD_sample_1[NumHits]/S");  
@@ -286,14 +290,14 @@ int main(int argc, char* argv[]) {
                 skippedTrashData ++;
                 hitID[digID] ++;
                 hitProcessed ++;
-                printf(" skipped trash data for DigID %03d | skippedData %lu \n", digID, skippedTrashData );
+                // printf(" skipped trash data for DigID %03d | skippedData %lu \n", digID, skippedTrashData );
                 continue; // skip trash data
               }
               hitsQueue.push(std::move(*decodedHit)); // Move the decoded hit into the event queue
             }
           }else{ // load next file if no hits
             
-            printf("\033[31m====== DigID %03d, file %s has No more hits \033[0m\n", digID, reader->GetFileName().c_str());
+            printf("\033[33m====== DigID %03d, file %s has No more hits \033[0m\n", digID, reader->GetFileName().c_str());
             fileID[digID]++;
             
             if( fileID[digID] >= fileGroups[digID].size() - 1 ) {
@@ -308,7 +312,7 @@ int main(int argc, char* argv[]) {
                   skippedTrashData ++;
                   hitID[digID] ++;
                   hitProcessed ++;
-                  printf(" skipped trash data for DigID %03d | skippedData %lu \n", digID, skippedTrashData );
+                  // printf(" skipped trash data for DigID %03d | skippedData %lu \n", digID, skippedTrashData );
                   continue; // skip trash data
                 }
                 hitsQueue.push(std::move(*decodedHit)); // Move the decoded hit into the event queue
@@ -327,7 +331,8 @@ int main(int argc, char* argv[]) {
         hitID[digID]++; // Increment the hitID for this DigID
         if( timeWindow < 0 ) break;
       }else{
-        if( hit.EVENT_TIMESTAMP - events.front().EVENT_TIMESTAMP <= timeWindow ) {
+        // if( hit.EVENT_TIMESTAMP - events.front().EVENT_TIMESTAMP <= timeWindow ) {
+        if( hit.TS_OF_TRIGGER_FULL - events.front().TS_OF_TRIGGER_FULL <= timeWindow ) {
           events.push_back(hit); // Add the hit to the events vector
           hitsQueue.pop();
           hitProcessed++; // Increment the hitProcessed count
@@ -366,6 +371,8 @@ int main(int argc, char* argv[]) {
         pre_rise_energy[i]  = events[i].PRE_RISE_ENERGY; // Pre-rise energy
         post_rise_energy[i] = events[i].POST_RISE_ENERGY; // Post-rise energy
         timestamp[i]        = events[i].EVENT_TIMESTAMP; // Timestamp
+
+        trigTS[i]    = events[i].TS_OF_TRIGGER_FULL;
 
         CFD_sample_0[i]     = events[i].CFD_SAMPLE_0;  
         CFD_sample_1[i]     = events[i].CFD_SAMPLE_1;  

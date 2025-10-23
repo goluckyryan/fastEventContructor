@@ -45,7 +45,7 @@ echo "################################"
 
 if [ $ANALYSIS -ge 1 ]; then
     echo "Running analyzer on: ${outFileName}"
-    root 'analyzer.cpp("'${outFileName}'")'
+    root 'analyzer.cpp++("'${outFileName}'")'
 else
     echo "Skipping analysis step."
 fi  

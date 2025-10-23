@@ -22,13 +22,13 @@ void test(){
   // LoadChannelMapFromFile();
   // return;
 
-  readRawTrace("test.root");
+  // readRawTrace("test.root");
 
-  return;
+  // return;
 
 
   // haha.Open("data/dgs_run116/dgs_run116.gtd10_000_0136_2", true);
-  haha.Open("data/haha_004/haha_004_000_0099_T", true);
+  haha.Open("data/haha_016/haha_016_000_0099_T", true);
   
   // haha.ReadNextNHitsFromFile(false);
   // // haha.ReadNextNHitsFromFile(false);
@@ -40,12 +40,17 @@ void test(){
 
   // haha.GetHit(1).Print();
 
-  haha.Scan(true, false);
-  printf("           File Size: %.3f Mbytes\n", haha.GetFileSize()/1024./1024.);
-  printf("Global Earliest Time: %lu x 10 ns\n", haha.GetGlobalEarliestTime());
-  printf("    Global Last Time: %lu x 10 ns\n", haha.GetGlobalLastTime());
-  printf("           time span: %.3f sec\n", (haha.GetGlobalLastTime() - haha.GetGlobalEarliestTime()) * 10. /1e9);
-  printf(" Max Hit Size Needed: %u\n", haha.GetMaxHitSize());
+  // haha.Scan(true, false);
+  // printf("           File Size: %.3f Mbytes\n", haha.GetFileSize()/1024./1024.);
+  // printf("Global Earliest Time: %lu x 10 ns\n", haha.GetGlobalEarliestTime());
+  // printf("    Global Last Time: %lu x 10 ns\n", haha.GetGlobalLastTime());
+  // printf("           time span: %.3f sec\n", (haha.GetGlobalLastTime() - haha.GetGlobalEarliestTime()) * 10. /1e9);
+  // printf(" Max Hit Size Needed: %u\n", haha.GetMaxHitSize());
+
+  haha.ReadNextNHitsFromFile(false);
+  for( int i = 0; i < haha.GetHitSize(); i++){
+    printf("%4d | %X %X | %lX \n", i, haha.GetHit(i).payload[3], haha.GetHit(i).payload[2], haha.GetHit(i).gebHeader.timestamp);
+  }
 
   // printf(" hit count: %d \n", haha.GetNumData());
 

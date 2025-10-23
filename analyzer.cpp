@@ -74,6 +74,9 @@ std::vector<float> energyDetX, energyDetY;
 std::vector<double> timeDetX, timeDetY;
 std::vector<float> offsetX, offsetY;
 
+TH1F * hTT1 = new TH1F("hTT1", "timestamp diff from 1st hit of events; tick", 400, 0, 1600);
+TH1F * hTT2 = new TH1F("hT21", "TrigTS diff from 1st hit of events; tick", 400, 0, 1600);
+
 void analyzer(TString rootFileName){
 
   LoadChannelMapFromFile();
@@ -88,6 +91,7 @@ void analyzer(TString rootFileName){
   TTreeReaderArray<UInt_t>     preRiseEnergy(reader, "pre_rise_energy");
   TTreeReaderArray<UInt_t>    postRiseEnergy(reader, "post_rise_energy");
   TTreeReaderArray<ULong64_t> eventTimestamp(reader, "event_timestamp");
+  TTreeReaderArray<ULong64_t>         trigTS(reader, "trigTS");
   TTreeReaderArray<Short_t>     CFD_sample_0(reader, "CFD_sample_0");
   TTreeReaderArray<Short_t>     CFD_sample_1(reader, "CFD_sample_1");
   TTreeReaderArray<Short_t>     CFD_sample_2(reader, "CFD_sample_2");
@@ -110,6 +114,9 @@ void analyzer(TString rootFileName){
   //loop over all entries
 
   double time0[110];
+
+  uint64_t timestamp0 = 0;
+  uint64_t trigTS0 = 0;
   
   for( int entry = 0; entry < nEntries ; entry++ ){
     reader.Next();  
@@ -131,7 +138,22 @@ void analyzer(TString rootFileName){
 
     double timestamp;
 
-    for( int hit = 0; hit < *nHits; hit++ ){
+    for( unsigned int hit = 0; hit < *nHits; hit++ ){
+
+      if( hit == 0){
+        if( timestamp0 == 0) {
+          timestamp0 = eventTimestamp[hit];
+        }else{
+          hTT1->Fill( eventTimestamp[hit] - timestamp0 );
+          timestamp0 = eventTimestamp[hit];
+        }
+        if( trigTS0 == 0) {
+          trigTS0 = trigTS[hit];
+        }else{
+          hTT2->Fill( trigTS[hit] - trigTS0);
+          trigTS0 = trigTS[hit];
+        }
+      }
 
       // short board = id[hit] / 100;
       // short channel = id[hit] % 100;
@@ -184,12 +206,12 @@ void analyzer(TString rootFileName){
     hMultiHits->Fill(gammaHit);
 
     if(gammaHit == 2 ){
-      for ( int hit1 = 0; hit1 < *nHits; hit1++ ){
+      for ( unsigned int hit1 = 0; hit1 < *nHits; hit1++ ){
         if( detID[hit1] == 0 || detID[hit1] == 999 ) continue;
         
         float energy1 = (postRiseEnergy[hit1] - preRiseEnergy[hit1] )/ MWIN;
         
-        for ( int hit2 = hit1 + 1; hit2 < *nHits; hit2++ ){
+        for ( unsigned int hit2 = hit1 + 1; hit2 < *nHits; hit2++ ){
           if( detID[hit2] == 0 || detID[hit2] == 999 ) continue;
 
           float energy2 = (postRiseEnergy[hit2] - preRiseEnergy[hit2] )/ MWIN;
@@ -250,9 +272,13 @@ void analyzer(TString rootFileName){
   
   TCanvas * canvas = new TCanvas("canvas", "Semi-Online analysis", 1000, 1500);
   canvas->Divide(2,3);
-  canvas->cd(1); hMultiHits->Draw();
-  canvas->cd(2); hIDvID->Draw("colz");
-  // canvas->cd(4); hEE->Draw("colz");
+
+  canvas->cd(1); hTT1->Draw();
+  canvas->cd(2); canvas->cd(2)->SetLogy(); hTT2->Draw(); 
+
+  // canvas->cd(1); hMultiHits->Draw();
+  // canvas->cd(2); hIDvID->Draw("colz");
+  // // canvas->cd(4); hEE->Draw("colz");
 
   canvas->cd(3); hGTimeDiff->Draw();
   canvas->cd(4); hGG->Draw("colz");

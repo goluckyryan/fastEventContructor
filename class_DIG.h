@@ -57,6 +57,7 @@ public:
   bool P2_MODE;                    //Word 10 (14)
   bool CAPTURE_PARST_TS;           //Word 10 (15)
   unsigned short TS_OF_TRIGGER;    //Word 10 (31:16)
+  unsigned long long TS_OF_TRIGGER_FULL; // ( timestamp & 0xFFFFFFFF0000 ) + TS_OF_TRIGGER;
   
   unsigned int MULTIPLEX_DATA;         //Word 11 (23:0)  (multiplex data field)
   unsigned int LAST_POST_RISE_M_SUM;   //Word 11 (31:24) AND Word 12 (31:24) AND Word 13 (31:24)
@@ -708,6 +709,8 @@ private:
 
     //Word 10
     TS_OF_TRIGGER         = (unsigned short) ((Raw_Header[10] & 0xFFFF0000) >> 16);//Word 10 (31:16)
+    TS_OF_TRIGGER_FULL    = (EVENT_TIMESTAMP & 0xFFFFFFFF0000) + TS_OF_TRIGGER;
+
     P2_MODE               = (unsigned short)(ExtractBit(Raw_Header[10], 14));//Word 10 (14)
     CAPTURE_PARST_TS      = (unsigned short)(ExtractBit(Raw_Header[10], 15));//Word 10 (15)
 

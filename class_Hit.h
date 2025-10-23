@@ -83,6 +83,8 @@ public:
 
       double tdc_avg_time = tdcHit.avgPhaseTime; // in ns
 
+      digHit.TS_OF_TRIGGER_FULL = tdcHit.timestampTrig;
+
       //TODO to add offset correction here if needed
       uint64_t offset = 0; // in 10 ns unit
 
@@ -90,6 +92,11 @@ public:
       digHit.EVENT_TIMESTAMP += offset;
 
       digHit.PRE_RISE_ENERGY = static_cast<uint32_t>((tdc_avg_time - (digHit.EVENT_TIMESTAMP * 10)) * 1000); 
+
+      // if ( digHit.EVENT_TIMESTAMP == 0 ){
+      //   digHit.HEADER_TYPE = TRASH_DATA;
+      //   return digHit;
+      // }
 
       // printf(" tdc_avg_time: %.3f ns, EVENT_TIMESTAMP: %lu, PRE_RISE_ENERGY: %u \n", tdc_avg_time, digHit.EVENT_TIMESTAMP, digHit.PRE_RISE_ENERGY);
 
