@@ -9,7 +9,7 @@
 
 #include "readTrace_S.C"
 
-BinaryReader haha(1000);
+BinaryReader haha(1); // 100 is the deafult hit size
 
 struct CompareEvent {
   bool operator()(const DIG& a, const DIG& b) {
@@ -25,6 +25,33 @@ void test(){
   // readRawTrace("test.root");
 
   // return;
+
+  haha.Open("data/TAC2_019/TAC2_019_000_0135_5", true);
+
+  haha.ReadNextNHitsFromFile(false);
+  for( int i = 0; i < haha.GetHitSize(); i++){
+  // for( int i = 0; i < 10; i++){
+    HIT hit = haha.GetHit(i);
+    DIG dig = hit.DecodePayload();
+    printf("%4d | %lX \n", i, haha.GetHit(i).gebHeader.timestamp);
+    hit.Print();
+    dig.Print();
+  }
+
+  BinaryReader haha2(1);
+  haha2.Open("data/TAC2_019/TAC2_019_000_0099_T", true);
+
+  haha2.ReadNextNHitsFromFile(false);
+  for( int i = 0; i < haha2.GetHitSize(); i++){
+  // for( int i = 0; i < 10; i++){
+    HIT hit = haha2.GetHit(i);
+    TDC tac = hit.DecodeTAC();
+    printf("%4d | %lX \n", i, haha2.GetHit(i).gebHeader.timestamp);
+    hit.Print();
+    tac.print();
+  }
+
+  return;
 
 
   // haha.Open("data/dgs_run116/dgs_run116.gtd10_000_0136_2", true);

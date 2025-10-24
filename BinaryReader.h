@@ -43,7 +43,7 @@ public:
   size_t Tell() { return static_cast<size_t>(file.tellg()); }  // Get current file position
   void Seek(std::streampos pos) { file.seekg(pos); }   // Seek to position
   
-  void Scan(bool quick = false, bool debug = false);  // Scan the file to count data hits
+  void Scan(bool quick = false, bool debug = false, bool oneRead = false);  // Scan the file to count data hits
   unsigned int GetNumData() const { return totalNumHits; }  // Get number of data hits found
   
   void ResetFile() {
@@ -126,7 +126,7 @@ private:
 
 //########################################################################
 
-inline void BinaryReader::Scan(bool quick, bool debug) {
+inline void BinaryReader::Scan(bool quick, bool debug, bool oneRead) {
 
   HIT hit;
   hit.UniqueID = GetUniqueID();
@@ -226,6 +226,8 @@ inline void BinaryReader::Scan(bool quick, bool debug) {
     }
 
     totalNumHits ++;
+
+    if( oneRead && totalNumHits >= maxHitSize) break;
   }while(Tell() < fileSize);
 
  

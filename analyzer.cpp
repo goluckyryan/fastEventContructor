@@ -56,17 +56,22 @@ double ZeroCrossing(std::vector<std::pair<double, double>> points){
 
 };
 
-int eRange[2] = {1000, 2200};
+int eRange[2] = {0, 6000};
 
 TH1F * he[110];
+TH2F * heID = new TH2F("heID", "Energy vs Detector ID; Detector ID; Energy [a.u.]", 110, 0, 110, 200, eRange[0], eRange[1]);
+
+TH2F * heIDEven = new TH2F("heIDEven", "Energy vs Detector ID South; Detector ID; Energy [a.u.]", 55, 0, 110, 200, eRange[0], eRange[1]);
+TH2F * heIDOdd  = new TH2F("heIDOdd",  "Energy vs Detector ID North; Detector ID; Energy [a.u.]", 55, 0, 110, 200, eRange[0], eRange[1]);
+
 TH1F * hTDiff[110];
 TH1F * hMultiHits = new TH1F("hMultiHits", "Gamma Multiplicity; Number of Hits; Counts", 10, 0, 10);
 TH2F * hIDvID = new TH2F("hIDvID", "Detector (2 multiplicity); Detector ID; Detector ID", 110, 0, 110, 110, 0, 110);
 TH2F * hEE = new TH2F("hEE", "Energy-Energy (2 multiplicity); Energy 1 (a.u.); Energy 2 (a.u.)", 400, eRange[0], eRange[1], 400, eRange[0], eRange[1]);
 
 //coincident bewteen det X and Y
-int detX = 42;
-int detY = 48;
+int detX = 70;
+int detY = 62;
 
 TH2F * hGG = new TH2F("hGG", Form("Energy-Energy Det %d vs Det %d; Energy Det %d (a.u.); Energy Det %d (a.u.)", detX, detY, detX, detY), 100, eRange[0], eRange[1], 100, eRange[0], eRange[1]);
 TH1F * hGTimeDiff = new TH1F("hGTimeDiff", Form("Time Difference Det %d - Det %d; Time Difference [ns]; Counts", detX, detY), 100, -250, 250);
@@ -76,6 +81,9 @@ std::vector<float> offsetX, offsetY;
 
 TH1F * hTT1 = new TH1F("hTT1", "timestamp diff from 1st hit of events; tick", 400, 0, 1600);
 TH1F * hTT2 = new TH1F("hT21", "TrigTS diff from 1st hit of events; tick", 400, 0, 1600);
+
+TH2F * hTDiffHitOrder = new TH2F("hTDiffHitOrder", "62 ; time diff [ns]; order", 1000, 450, 1000, 10, 0, 10 );
+TH2F * hTDiffEnergy = new TH2F("hTDiffEnergy", "62", 1000, 450, 1000, 200, eRange[0], eRange[1] );
 
 void analyzer(TString rootFileName){
 
@@ -107,22 +115,26 @@ void analyzer(TString rootFileName){
 
     TString histNameTDiff = Form("hTDiff%03d", i+1);
     TString histTitleTDiff = Form("Time Difference Spectrum for Detector %d; Time Difference [ns]; Counts", i+1);
-    hTDiff[i] = new TH1F(histNameTDiff, histTitleTDiff, 200, -50, 50);
+    hTDiff[i] = new TH1F(histNameTDiff, histTitleTDiff, 1000, 500, 1000);
   }
 
   //^================================== Analysis Loop ==================================^//
   //loop over all entries
 
   double time0[110];
+  int gsCount[110];
 
   uint64_t timestamp0 = 0;
   uint64_t trigTS0 = 0;
+ 
+  unsigned int noTACEventCount = 0;
   
   for( int entry = 0; entry < nEntries ; entry++ ){
     reader.Next();  
     
     for ( int i = 0; i < 110; i++ ){
       time0[i] = TMath::QuietNaN();
+      gsCount[i]=-1;
     }
     double timeTAC = TMath::QuietNaN();
     energyDetX.clear();
@@ -131,7 +143,8 @@ void analyzer(TString rootFileName){
     timeDetY.clear();
     offsetX.clear();
     offsetY.clear();
-
+    double energy62 = TMath::QuietNaN();
+    
     // hMultiHits->Fill(*nHits);
     unsigned short gammaHit = 0;
     std::vector<std::pair<double, double>> points;
@@ -161,18 +174,31 @@ void analyzer(TString rootFileName){
       timestamp = static_cast<double>(eventTimestamp[hit]) * 10.0; // in ns
 
       if( detID[hit] == 999 ){ // TAC channel
-        timeTAC = timestamp  + preRiseEnergy[hit] / 1000; // in ns
+        if ( TMath::IsNaN(timeTAC)) timeTAC = timestamp  + preRiseEnergy[hit] / 1000.; // in ns
       }else{
 
         if (detID[hit] == 0 ) continue;
 
         float energy = (postRiseEnergy[hit] - preRiseEnergy[hit] )/ MWIN;
 
+        if( detID[hit] == 62) energy62 = energy;
+
         // printf("Entry: %d, Hit: %d, detID: %d, PreRiseEnergy: %u, PostRiseEnergy: %u, Energy: %.2f, Timestamp: %llu\n", 
         //         entry, hit, detID[hit], preRiseEnergy[hit], postRiseEnergy[hit], energy, eventTimestamp[hit]);
 
         he[detID[hit]-1]->Fill(energy);
-        if( eRange[0] < energy && energy < eRange[1] ) gammaHit ++;
+        heID->Fill( detID[hit], energy );
+        if( detID[hit] % 2 == 0 ){
+          heIDEven->Fill( detID[hit], energy );
+        }else{
+          heIDOdd->Fill( detID[hit], energy );
+        }
+
+        if( eRange[0] < energy && energy < eRange[1] ) {
+          gsCount[detID[hit]-1] = gammaHit;
+          gammaHit ++;
+        }
+
 
         points.clear();
         points.push_back( std::make_pair(    0.0, CFD_sample_0[hit]) );
@@ -201,6 +227,9 @@ void analyzer(TString rootFileName){
         //         entry, hit, detID[hit], preRiseEnergy[hit], postRiseEnergy[hit], eventTimestamp[hit], zeroCross, time0[detID[hit]-1] );
 
       }
+
+      if( TMath::IsNaN(timeTAC) ) noTACEventCount ++;
+
     }
 
     hMultiHits->Fill(gammaHit);
@@ -228,23 +257,17 @@ void analyzer(TString rootFileName){
       }
     }
 
-    if (entry % (nEntries / 100 == 0 ? 1 : nEntries / 100) == 0) {
-      int percent = (100 * entry) / nEntries;
-      printf("\rProgress: [");
-      int barWidth = 50;
-      int pos = barWidth * percent / 100;
-      for (int i = 0; i < barWidth; ++i) {
-        if (i < pos) printf("#");
-        else if (i == pos) printf(">");
-        else printf(" ");
-      }
-      printf("] %d%%", percent);
-      fflush(stdout);
-    }
+    if( gammaHit == 3){
+      for ( int i = 0; i < 110; i++ ){
+        if( TMath::IsNaN(time0[i]) || TMath::IsNaN(timeTAC) ) continue;
+        hTDiff[i]->Fill( timeTAC - time0[i] - 5000);
 
-    for ( int i = 0; i < 110; i++ ){
-      if( TMath::IsNaN(time0[i]) || TMath::IsNaN(timeTAC) ) continue;
-      hTDiff[i]->Fill( time0[i] - timeTAC );
+        if( i == 61){
+          hTDiffHitOrder->Fill(timeTAC - time0[i] - 5000, gsCount[i]);     
+          hTDiffEnergy->Fill(timeTAC - time0[i] - 5000, energy62);     
+        }
+
+      }
     }
 
     //coincidence between det X and Y
@@ -263,6 +286,21 @@ void analyzer(TString rootFileName){
       }
     }
 
+    //========================= Progress bar
+    if (entry % (nEntries / 100 == 0 ? 1 : nEntries / 100) == 0) {
+      int percent = (100 * entry) / nEntries;
+      printf("\rProgress: [");
+      int barWidth = 50;
+      int pos = barWidth * percent / 100;
+      for (int i = 0; i < barWidth; ++i) {
+        if (i < pos) printf("#");
+        else if (i == pos) printf(">");
+        else printf(" ");
+      }
+      printf("] %d%%", percent);
+      fflush(stdout);
+    }
+
 
   }
   printf("\n");
@@ -270,28 +308,39 @@ void analyzer(TString rootFileName){
   //^================================== Draw Histograms ==================================^//
   gStyle->SetOptStat(111111);
   
-  TCanvas * canvas = new TCanvas("canvas", "Semi-Online analysis", 1000, 1500);
-  canvas->Divide(2,3);
+  TCanvas * canvas = new TCanvas("canvas", "Semi-Online analysis", 2000, 1500);
+  canvas->Divide(4,3);
 
-  canvas->cd(1); hTT1->Draw();
-  canvas->cd(2); canvas->cd(2)->SetLogy(); hTT2->Draw(); 
+  // canvas->cd(1); hTT1->Draw();
+  // canvas->cd(2); canvas->cd(2)->SetLogy(); hTT2->Draw(); 
 
-  // canvas->cd(1); hMultiHits->Draw();
+  canvas->cd(1); heIDOdd->Draw("colz");
+  canvas->cd(2); heIDEven->Draw("colz");
+  canvas->cd(3); hTDiff[61]->Draw("colz");
+
+
+  canvas->cd(4); hMultiHits->Draw();
+  // canvas->cd(2); heID->Draw("colz");
   // canvas->cd(2); hIDvID->Draw("colz");
   // // canvas->cd(4); hEE->Draw("colz");
 
-  canvas->cd(3); hGTimeDiff->Draw();
-  canvas->cd(4); hGG->Draw("colz");
+  canvas->cd(5); hGTimeDiff->Draw();
+  canvas->cd(6); hGG->Draw("colz");
+  canvas->cd(7); he[60]->Draw();
+  canvas->cd(8); hTDiffHitOrder->Draw("colz");
 
-  canvas->cd(5); he[detX-1]->Draw();
-  canvas->cd(6); he[detY-1]->Draw();
-
+  canvas->cd(9); he[detX-1]->Draw();
+  canvas->cd(10); he[detY-1]->Draw();
+  canvas->cd(11); hTDiff[60]->Draw();
+  canvas->cd(12); hTDiffEnergy->Draw("colz");
 
   printf("=================================\n");
   printf("      PlotE() to see Energy spectra\n");
   printf("  PlotTdiff() to see Time Difference spectra\n");
   printf("  newCanvas() to create a new canvas\n");
   printf("=================================\n");
+
+  printf(" no TAC event count : %u\n", noTACEventCount);
 }
 
 //^===========================  Plots

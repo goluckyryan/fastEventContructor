@@ -1,6 +1,6 @@
 #!/bin/bash -l
 
-expName="haha"
+expName="TAC2"
 timeWin=1000
 
 # Ensure a run number is provided
@@ -34,18 +34,22 @@ if [ -z "$inputFiles" ]; then
     exit 1
 fi
 
-if [ $BUILD -lt 1 ] || [ ! -f "${outFileName}" ] || find ${dataPattern} -newer "${outFileName}" | grep -q .; then
-    echo "Running EventBuilder to generate: ${outFileName}"
-    ./EventBuilder "${outFileName}" "${timeWin}" ${inputFiles}
+if [ $BUILD -eq 0 ]; then
+    echo "skipp event building"
 else
-    echo "Skipping EventBuilder; ${outFileName} is up to date."
+    if [ $BUILD -lt 1 ] || [ ! -f "${outFileName}" ] || find ${dataPattern} -newer "${outFileName}" | grep -q .; then
+        echo "Running EventBuilder to generate: ${outFileName}"
+        ./EventBuilder "${outFileName}" "${timeWin}" ${inputFiles}
+    else
+        echo "Skipping EventBuilder; ${outFileName} is up to date."
+    fi
 fi
 
 echo "################################"
 
 if [ $ANALYSIS -ge 1 ]; then
     echo "Running analyzer on: ${outFileName}"
-    root 'analyzer.cpp++("'${outFileName}'")'
+    root 'analyzer.cpp("'${outFileName}'")'
 else
     echo "Skipping analysis step."
 fi  

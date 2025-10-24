@@ -57,7 +57,7 @@ public:
   bool P2_MODE;                    //Word 10 (14)
   bool CAPTURE_PARST_TS;           //Word 10 (15)
   unsigned short TS_OF_TRIGGER;    //Word 10 (31:16)
-  unsigned long long TS_OF_TRIGGER_FULL; // ( timestamp & 0xFFFFFFFF0000 ) + TS_OF_TRIGGER;
+  uint64_t TS_OF_TRIGGER_FULL; // ( timestamp & 0xFFFFFFFF0000 ) + TS_OF_TRIGGER;
   
   unsigned int MULTIPLEX_DATA;         //Word 11 (23:0)  (multiplex data field)
   unsigned int LAST_POST_RISE_M_SUM;   //Word 11 (31:24) AND Word 12 (31:24) AND Word 13 (31:24)
@@ -130,9 +130,10 @@ public:
     printf("  HEADER_LENGTH (Byte)        : %u\n", HEADER_LENGTH);
 
     printf("-------------------------------------------\n");
-    printf("  EVENT_TIMESTAMP             : %lu\n", EVENT_TIMESTAMP);
-    printf("  TS_OF_TRIGGER (16bit)       : %hu\n", TS_OF_TRIGGER);
-    printf("  PEAK_TIMESTAMP (16bit)      : %hu\n", PEAK_TIMESTAMP);
+    printf("  EVENT_TIMESTAMP             : %lu | %lX\n", EVENT_TIMESTAMP, EVENT_TIMESTAMP);
+    printf("  TS_OF_TRIGGER (16bit)       : %hu | %X\n", TS_OF_TRIGGER, TS_OF_TRIGGER);
+    printf("  TS_OF_TRIGGER_FULL          : %lu | %lX\n", TS_OF_TRIGGER_FULL, TS_OF_TRIGGER_FULL);
+    printf("  PEAK_TIMESTAMP (16bit)      : %hu |\n", PEAK_TIMESTAMP);
 
     uint64_t peak_ts = EVENT_TIMESTAMP & 0xFFFFFFFF0000 + PEAK_TIMESTAMP;
     if( peak_ts < EVENT_TIMESTAMP ) peak_ts += 0x10000; // handle roll over

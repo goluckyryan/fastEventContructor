@@ -60,6 +60,12 @@ public:
     // Print();
   } 
 
+  TDC DecodeTAC(){
+    TDC tdcHit;
+    tdcHit.DecodePackedData(payload);
+    return tdcHit;
+  }
+
   DIG DecodePayload(bool withTrace = false) {
     DIG digHit;
 
@@ -83,10 +89,10 @@ public:
 
       double tdc_avg_time = tdcHit.avgPhaseTime; // in ns
 
-      digHit.TS_OF_TRIGGER_FULL = tdcHit.timestampTrig;
+      digHit.TS_OF_TRIGGER_FULL = tdcHit.timestampTrig / 10; // in 10 ns
 
       //TODO to add offset correction here if needed
-      uint64_t offset = 0; // in 10 ns unit
+      uint64_t offset = -500; // in 10 ns unit
 
       digHit.EVENT_TIMESTAMP = static_cast<uint64_t>(tdc_avg_time / 10.0); // in 10 ns unit
       digHit.EVENT_TIMESTAMP += offset;

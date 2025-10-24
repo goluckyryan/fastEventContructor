@@ -23,8 +23,11 @@
 #include <vector>
 
 #define FULL_OUTPUT false
-#define MAX_MULTI 400
-#define MAX_READ_HITS 100000 // Maximum hits to read at a time
+#define MAX_MULTI 1000
+#define MAX_READ_HITS 300000 // Maximum hits to read at a time
+
+#define ONE_READ true
+//#define USE_TrigTS // comment out if not use trigTS for shorting
 
 #include <sys/time.h> /** struct timeval, select() */
 inline unsigned int getTime_us(){
@@ -39,8 +42,11 @@ inline unsigned int getTime_us(){
 // Comparator for min-heap (smallest timestamp on top)
 struct CompareEvent {
   bool operator()(const DIG& a, const DIG& b) {
-    // return a.EVENT_TIMESTAMP > b.EVENT_TIMESTAMP;
-    return a.TS_OF_TRIGGER_FULL > b.TS_OF_TRIGGER_FULL;
+    #ifdef USE_TrigTS
+      return a.TS_OF_TRIGGER_FULL > b.TS_OF_TRIGGER_FULL;
+    #else
+      return a.EVENT_TIMESTAMP > b.EVENT_TIMESTAMP;
+    #endif
 
   }
 };
@@ -100,6 +106,14 @@ int main(int argc, char* argv[]) {
     inFileName[i] = argv[i+3];
   }
 
+  if( ONE_READ){
+    printf("\e[31m########### ONLY READ %d per file.\e[0m\n", MAX_READ_HITS);
+  }
+
+  #ifdef USE_TrigTS
+    printf("########### using trigTS for event building\n");
+  #endif
+
   printf(" out file : \033[1;33m%s\033[m\n", outFileName.Data());
   if ( timeWindow < 0 ){
     printf(" Event building time window : no event build\n");
@@ -117,10 +131,10 @@ int main(int argc, char* argv[]) {
   std::vector<std::thread> threads; // Create a vector of threads for parallel scanning
 
   for( int i = 0 ; i < nFile ; i++){
-    reader[i] = new BinaryReader((MAX_READ_HITS)); 
+    reader[i] = new BinaryReader(MAX_READ_HITS); 
     reader[i]->Open(inFileName[i].Data());
     threads.emplace_back([](BinaryReader* reader) { 
-      reader->Scan(true); 
+      reader->Scan(true, false, ONE_READ); 
       printf("%s | %6.1f MB | # hit : %10d (%d)\n", reader->GetFileName().c_str(), reader->GetFileSize()/1024./1024., reader->GetNumData(), reader->GetMaxHitSize());
     }, reader[i]);
   }
@@ -269,44 +283,21 @@ int main(int argc, char* argv[]) {
 
       DIG hit = hitsQueue.top(); // Get the top event from the priority queue
       int digID = hit.UniqueID; // Get the DigID from the event
+      
+      if( ! ONE_READ ){
+        if( fileID[digID] >= 0  ){ // check shoudl read the next N data or next file for this DigID
+          // printf("\033[34m====== DigID %03d, file %d, hitID %d\033[0m\n", digID, fileID[digID], hitID[digID]);
+          BinaryReader* reader = fileGroups[digID][fileID[digID]];
+          if( hitID[digID] >= reader->GetHitSize() * 0.9) { // If the hitID exceeds the number of hits in the current file
 
-      if( fileID[digID] >= 0  ){ // check shoudl read the next N data or next file for this DigID
-
-        // printf("\033[34m====== DigID %03d, file %d, hitID %d\033[0m\n", digID, fileID[digID], hitID[digID]);
-
-        BinaryReader* reader = fileGroups[digID][fileID[digID]];
-        if( hitID[digID] >= reader->GetHitSize() * 0.9) { // If the hitID exceeds the number of hits in the current file
-
-          // printf("\033[34m====== DigID %03d, file %s hitID %d reached the limit (%d hits)\033[0m\n", 
-          //        digID, reader->GetFileName().c_str(), hitID[digID], reader->GetHitSize());
-          reader->ReadNextNHitsFromFile(); // Read more hits from the current file
+            // printf("\033[34m====== DigID %03d, file %s hitID %d reached the limit (%d hits)\033[0m\n", 
+            //        digID, reader->GetFileName().c_str(), hitID[digID], reader->GetHitSize());
+            reader->ReadNextNHitsFromFile(); // Read more hits from the current file
           
-          if( reader->GetHitSize() > 0 ) {
-            hitID[digID] = 0; // Reset hitID for this DigID
-            // printf("\033[34m====== DigID %03d, file %s has more hits (%d)\033[0m\n\n", digID, reader->GetFileName().c_str(), reader->GetHitSize());
-            for( int i = 0; i < reader->GetHitSize(); i++)  {
-              std::unique_ptr<DIG> decodedHit = std::make_unique<DIG>(reader->GetHit(i).DecodePayload()); // Decode the hit payload
-              if( decodedHit->HEADER_TYPE == TRASH_DATA ) {
-                skippedTrashData ++;
-                hitID[digID] ++;
-                hitProcessed ++;
-                // printf(" skipped trash data for DigID %03d | skippedData %lu \n", digID, skippedTrashData );
-                continue; // skip trash data
-              }
-              hitsQueue.push(std::move(*decodedHit)); // Move the decoded hit into the event queue
-            }
-          }else{ // load next file if no hits
-            
-            printf("\033[33m====== DigID %03d, file %s has No more hits \033[0m\n", digID, reader->GetFileName().c_str());
-            fileID[digID]++;
-            
-            if( fileID[digID] >= fileGroups[digID].size() - 1 ) {
-              fileID[digID] = -1; // Mark that there are no more files for this DigID
-            }else{
-              reader = fileGroups[digID][fileID[digID]];
-              reader->ReadNextNHitsFromFile(); // Read more hits from the current file
+            if( reader->GetHitSize() > 0 ) {
               hitID[digID] = 0; // Reset hitID for this DigID
-              for( int i = 0; i < reader->GetHitSize(); i++) {
+              printf("\033[34m====== DigID %03d, file %s has more hits (%d)\033[0m\n", digID, reader->GetFileName().c_str(), reader->GetHitSize());
+              for( int i = 0; i < reader->GetHitSize(); i++)  {
                 std::unique_ptr<DIG> decodedHit = std::make_unique<DIG>(reader->GetHit(i).DecodePayload()); // Decode the hit payload
                 if( decodedHit->HEADER_TYPE == TRASH_DATA ) {
                   skippedTrashData ++;
@@ -317,11 +308,33 @@ int main(int argc, char* argv[]) {
                 }
                 hitsQueue.push(std::move(*decodedHit)); // Move the decoded hit into the event queue
               }
+            }else{ // load next file if no hits
+              
+              printf("\033[33m====== DigID %03d, file %s has No more hits \033[0m\n", digID, reader->GetFileName().c_str());
+              fileID[digID]++;
+              
+              if( fileID[digID] >= fileGroups[digID].size() - 1 ) {
+                fileID[digID] = -1; // Mark that there are no more files for this DigID
+              }else{
+                reader = fileGroups[digID][fileID[digID]];
+                reader->ReadNextNHitsFromFile(); // Read more hits from the current file
+                hitID[digID] = 0; // Reset hitID for this DigID
+                for( int i = 0; i < reader->GetHitSize(); i++) {
+                  std::unique_ptr<DIG> decodedHit = std::make_unique<DIG>(reader->GetHit(i).DecodePayload()); // Decode the hit payload
+                  if( decodedHit->HEADER_TYPE == TRASH_DATA ) {
+                    skippedTrashData ++;
+                    hitID[digID] ++;
+                    hitProcessed ++;
+                    // printf(" skipped trash data for DigID %03d | skippedData %lu \n", digID, skippedTrashData );
+                    continue; // skip trash data
+                  }
+                  hitsQueue.push(std::move(*decodedHit)); // Move the decoded hit into the event queue
+                }
+              }
+    
             }
-  
           }
         }
-
       }
 
       if( events.size() == 0 ) {
@@ -331,8 +344,11 @@ int main(int argc, char* argv[]) {
         hitID[digID]++; // Increment the hitID for this DigID
         if( timeWindow < 0 ) break;
       }else{
-        // if( hit.EVENT_TIMESTAMP - events.front().EVENT_TIMESTAMP <= timeWindow ) {
-        if( hit.TS_OF_TRIGGER_FULL - events.front().TS_OF_TRIGGER_FULL <= timeWindow ) {
+        #ifdef USE_TrigTS
+          if( hit.TS_OF_TRIGGER_FULL - events.front().TS_OF_TRIGGER_FULL <= timeWindow ) {
+        #else
+          if( hit.EVENT_TIMESTAMP - events.front().EVENT_TIMESTAMP <= timeWindow ) {
+        #endif
           events.push_back(hit); // Add the hit to the events vector
           hitsQueue.pop();
           hitProcessed++; // Increment the hitProcessed count
