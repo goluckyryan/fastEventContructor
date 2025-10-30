@@ -74,8 +74,8 @@ public:
     if( gebHeader.type == 99 ){
       TDC tdcHit;
       tdcHit.DecodePackedData(payload);
-
-      if( tdcHit.isTrashData ) {
+      
+      if( tdcHit.isTrashData || tdcHit.validBit == 0 ) {
         // printf(" Trash TDC data found for UniqueID: %u\n", UniqueID);
         digHit.HEADER_TYPE = TRASH_DATA;
         return digHit; // return empty digHit
@@ -92,11 +92,10 @@ public:
       digHit.TS_OF_TRIGGER_FULL = tdcHit.timestampTrig / 10; // in 10 ns
 
       //TODO to add offset correction here if needed
-      uint64_t offset = -500; // in 10 ns unit
+      double offset = -5500; // in ns unit
+      tdc_avg_time += offset; // apply offset
 
       digHit.EVENT_TIMESTAMP = static_cast<uint64_t>(tdc_avg_time / 10.0); // in 10 ns unit
-      digHit.EVENT_TIMESTAMP += offset;
-
       digHit.PRE_RISE_ENERGY = static_cast<uint32_t>((tdc_avg_time - (digHit.EVENT_TIMESTAMP * 10)) * 1000); 
 
       // if ( digHit.EVENT_TIMESTAMP == 0 ){

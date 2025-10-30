@@ -139,7 +139,6 @@ inline void BinaryReader::Scan(bool quick, bool debug, bool oneRead) {
   unsigned short count = 0; // count how many time timestampList filled 
   std::vector<uint64_t> timestampList; // Store timestamps for error checking
 
-
   do{
     if( channel < 10 ){ //^=========== for digitizer data
       hit.gebHeader = Read<GEBHeader>();
@@ -158,7 +157,7 @@ inline void BinaryReader::Scan(bool quick, bool debug, bool oneRead) {
       
       // printf("Data ID : %d \n", totalNumHits);
       // gebHeader.Print();
-      
+
       if( hit.gebHeader.type != type) {
         printf("gebHeader error at Data ID : %d \n", totalNumHits);
         break;
@@ -173,7 +172,7 @@ inline void BinaryReader::Scan(bool quick, bool debug, bool oneRead) {
         printf("gebHeader error at Data ID : %d \n", totalNumHits);
         break;
       }
-      
+
       hit.ConstructGEBHeaderTimestampFromTACPayload(); 
     }
 
@@ -183,6 +182,7 @@ inline void BinaryReader::Scan(bool quick, bool debug, bool oneRead) {
       std::sort(timestampList.begin(), timestampList.end()); // Sort the timestamps for error checking
       
       if( count > 0 && timestampList.front() < globalLastTime) {
+        printf("file: %s \n", fileName.c_str());
         printf("global Last Time : %lu, first timestamp : %lu, increasing maxHitSize to %u\n", globalLastTime, timestampList.front(), maxHitSize);
         maxHitSize *= 2;
           // printf("\033[33m=== Increasing maxHitSize to %u due to timestamp not in order. %s \033[0m\n", maxHitSize, fileName.c_str());

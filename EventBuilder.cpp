@@ -267,6 +267,7 @@ int main(int argc, char* argv[]) {
     
   }
   
+  printf("...... skipped trash data : %u \n", skippedTrashData );
   printf("...... Initial hitsQueue size: %zu\n", hitsQueue.size());
   printf("...... Start event buinding\n");
   
@@ -296,7 +297,7 @@ int main(int argc, char* argv[]) {
           
             if( reader->GetHitSize() > 0 ) {
               hitID[digID] = 0; // Reset hitID for this DigID
-              printf("\033[34m====== DigID %03d, file %s has more hits (%d)\033[0m\n", digID, reader->GetFileName().c_str(), reader->GetHitSize());
+              // printf("\033[34m====== DigID %05d, file %s has more hits (%d)\033[0m\n", digID, reader->GetFileName().c_str(), reader->GetHitSize());
               for( int i = 0; i < reader->GetHitSize(); i++)  {
                 std::unique_ptr<DIG> decodedHit = std::make_unique<DIG>(reader->GetHit(i).DecodePayload()); // Decode the hit payload
                 if( decodedHit->HEADER_TYPE == TRASH_DATA ) {
@@ -310,7 +311,7 @@ int main(int argc, char* argv[]) {
               }
             }else{ // load next file if no hits
               
-              printf("\033[33m====== DigID %03d, file %s has No more hits \033[0m\n", digID, reader->GetFileName().c_str());
+              printf("\033[33m====== DigID %05d, file %s has No more hits \033[0m\n", digID, reader->GetFileName().c_str());
               fileID[digID]++;
               
               if( fileID[digID] >= fileGroups[digID].size() - 1 ) {

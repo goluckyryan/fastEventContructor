@@ -207,6 +207,9 @@ public:
     for (int i = 0; i < 4; ++i) {
       printf("Vernier-%d : 0x%02X = %d\n", i, vernier[i], vernier[i]);
     }
+
+    printf(" avg Phase Time : %.3f ns\n", avgPhaseTime);
+
     printf("==================================================================\n");
   }
 };
