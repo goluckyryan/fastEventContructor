@@ -139,73 +139,66 @@ inline void BinaryReader::Scan(bool quick, bool debug, bool oneRead) {
   unsigned short count = 0; // count how many time timestampList filled 
   std::vector<uint64_t> timestampList; // Store timestamps for error checking
 
-  do{
-    if( channel < 10 ){ //^=========== for digitizer data
+  //^=========== for TAC data, TAC file should always be 40*n Bytes, but scan it for checking data integrity
+  if( channel == 20 ){ 
+
+    do{
+      hit.payload = ReadArray<uint32_t>(10); // Read 10 words (40 bytes) for TDC data      
+
+      if( hit.payload[0] != 0xAAAAAAAA ) {
+        printf("gebHeader error at Data ID : %d \n", totalNumHits);
+        break;
+      }
+      // if( globalEarliestTime == UINT64_MAX ){
+      //   globalEarliestTime = (static_cast<uint64_t>(hit.payload[3] & 0x0000FFFF) << 32) + hit.payload[2];
+      // }
+
+      totalNumHits ++;
+      if( oneRead && totalNumHits >= maxHitSize) break;
+    }while(Tell() < fileSize);
+
+  }
+
+  //^=========== for digitizer data
+  if( channel < 10 ){ 
+    do{
       hit.gebHeader = Read<GEBHeader>();
       if( totalNumHits == 0) type = hit.gebHeader.type;
-
-      // if( debug && 131487 < totalNumHits && totalNumHits < 131491 ) {
-      //   printf("=============== event %u\n", totalNumHits);
-      //   hit.gebHeader.Print();
-
-      //   file.seekg(-static_cast<std::streamoff>(sizeof(GEBHeader)), std::ios::cur);
-      //   uint32_t buffer[4];
-      //   file.read(reinterpret_cast<char*>(buffer), sizeof(buffer));
-      //   printf("0x%08X\n0x%08X\n0x%08X\n0x%08X\n", buffer[0], buffer[1], buffer[2], buffer[3]);
-
-      // }
-      
-      // printf("Data ID : %d \n", totalNumHits);
-      // gebHeader.Print();
 
       if( hit.gebHeader.type != type) {
         printf("gebHeader error at Data ID : %d \n", totalNumHits);
         break;
       }
 
-    }else{ //^=========== for TDC data
+      timestampList.push_back(hit.gebHeader.timestamp); 
       
-      hit.payload = ReadArray<uint32_t>(10); // Read 10 words (40 bytes) for TDC data      
-      if( hit.payload.size() < 10 ) break; // Break if less than 10 words are read (end of file)
-      
-      if( hit.payload[0] != 0xAAAAAAAA ) {
-        printf("gebHeader error at Data ID : %d \n", totalNumHits);
-        break;
-      }
-
-      hit.ConstructGEBHeaderTimestampFromTACPayload(); 
-    }
-
-    timestampList.push_back(hit.gebHeader.timestamp); 
-
-    if( timestampList.size() >= maxHitSize ){ // check the timestamp error every maxHitSize hits
-      std::sort(timestampList.begin(), timestampList.end()); // Sort the timestamps for error checking
-      
-      if( count > 0 && timestampList.front() < globalLastTime) {
-        printf("file: %s \n", fileName.c_str());
-        printf("global Last Time : %lu, first timestamp : %lu, increasing maxHitSize to %u\n", globalLastTime, timestampList.front(), maxHitSize);
-        maxHitSize *= 2;
+      if( timestampList.size() >= maxHitSize ){ // check the timestamp error every maxHitSize hits
+        std::sort(timestampList.begin(), timestampList.end()); // Sort the timestamps for error checking
+        
+        if( count > 0 && timestampList.front() < globalLastTime) {
+          printf("file: %s \n", fileName.c_str());
+          printf("global Last Time : %lu, first timestamp : %lu, increasing maxHitSize to %u\n", globalLastTime, timestampList.front(), maxHitSize);
+          maxHitSize *= 2;
           // printf("\033[33m=== Increasing maxHitSize to %u due to timestamp not in order. %s \033[0m\n", maxHitSize, fileName.c_str());
-        CreateHits(maxHitSize); // Adjust the hit size to the maximum difference
+          CreateHits(maxHitSize); // Adjust the hit size to the maximum difference
+        }
+        
+        if( timestampList.front() < globalEarliestTime) globalEarliestTime = timestampList.front(); // Update the global earliest time
+        if( timestampList.back() > globalLastTime) globalLastTime = timestampList.back(); // Update the global last time 
+        
+        timestampList.clear(); // Clear the list for the next batch
+        count++;
       }
-
-      if( timestampList.front() < globalEarliestTime) globalEarliestTime = timestampList.front(); // Update the global earliest time
-      if( timestampList.back() > globalLastTime) globalLastTime = timestampList.back(); // Update the global last time 
       
-      timestampList.clear(); // Clear the list for the next batch
-      count++;
-    }
-
-    if( hit.gebHeader.timestamp < old_timestamp) {
-      if( debug ) printf("timestamp error at Data ID : %d \n", totalNumHits);
-      if( debug ) printf("old timestamp : %16lu \n", old_timestamp);
-      if( debug ) printf("new timestamp : %16lu \n", hit.gebHeader.timestamp);
-      timestamp_error_counter ++;
-      // hit.Print();
-    }
-    old_timestamp = hit.gebHeader.timestamp;
-
-    if( channel < 10 ){ //^=========== for digitizer data
+      if( hit.gebHeader.timestamp < old_timestamp) {
+        if( debug ) printf("timestamp error at Data ID : %d \n", totalNumHits);
+        if( debug ) printf("old timestamp : %16lu \n", old_timestamp);
+        if( debug ) printf("new timestamp : %16lu \n", hit.gebHeader.timestamp);
+        timestamp_error_counter ++;
+        // hit.Print();
+      }
+      old_timestamp = hit.gebHeader.timestamp;
+    
       if( quick ) {
         
         // if( debug && 131487 < totalNumHits && totalNumHits < 131491 ){
@@ -223,20 +216,20 @@ inline void BinaryReader::Scan(bool quick, bool debug, bool oneRead) {
       }else {
         hit.payload = ReadArray<uint32_t>(hit.gebHeader.payload_lenght_byte / sizeof(uint32_t));
       }
-    }
+    
+      totalNumHits ++;
 
-    totalNumHits ++;
-
-    if( oneRead && totalNumHits >= maxHitSize) break;
-  }while(Tell() < fileSize);
-
+      if( oneRead && totalNumHits >= maxHitSize) break;
+    }while(Tell() < fileSize);
  
-  std::sort(timestampList.begin(), timestampList.end()); // Sort the timestamps for error checking
-  if( timestampList.front() < globalEarliestTime) globalEarliestTime = timestampList.front(); // Update the global earliest time
-  if( timestampList.back() > globalLastTime) globalLastTime = timestampList.back(); // Update the global last time  
+    std::sort(timestampList.begin(), timestampList.end()); // Sort the timestamps for error checking
+    if( timestampList.front() < globalEarliestTime) globalEarliestTime = timestampList.front(); // Update the global earliest time
+    if( timestampList.back() > globalLastTime) globalLastTime = timestampList.back(); // Update the global last time  
 
+    if( timestamp_error_counter > 0 && debug) printf("%s : timestamp error found for %u times.\n", fileName.c_str(), timestamp_error_counter);
+  }
+  
   if( debug ) printf(" number of HIT Found: %d \n", totalNumHits);
-  if( timestamp_error_counter > 0 && debug) printf("%s : timestamp error found for %u times.\n", fileName.c_str(), timestamp_error_counter);
 
   file.seekg(0, std::ios::beg);
   hitID = 0; // Reset hitID to 0 after scanning
