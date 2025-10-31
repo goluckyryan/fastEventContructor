@@ -2,6 +2,7 @@
 
 expName="TAC2"
 timeWin=1000
+useTrigTS=1
 
 # Ensure a run number is provided
 if [ -z "$1" ]; then
@@ -25,7 +26,7 @@ fi
 echo "################ Process Run-${RUN}"
 
 dataPattern="data/${expName}_${RUN}/${expName}_${RUN}*"
-outFileName="root_data/${expName}_${RUN}.root"
+outFileName="root_data/${expName}_${RUN}_${useTrigTS}.root"
 
 inputFiles=$(ls -1 ${dataPattern} 2>/dev/null)
 
@@ -37,9 +38,11 @@ fi
 if [ $BUILD -eq 0 ]; then
     echo "skipp event building"
 else
+    make 
+    
     if [ $BUILD -lt 1 ] || [ ! -f "${outFileName}" ] || find ${dataPattern} -newer "${outFileName}" | grep -q .; then
         echo "Running EventBuilder to generate: ${outFileName}"
-        ./EventBuilder "${outFileName}" "${timeWin}" ${inputFiles}
+        ./EventBuilder "${outFileName}" "${timeWin}" "${useTrigTS}" ${inputFiles}
     else
         echo "Skipping EventBuilder; ${outFileName} is up to date."
     fi

@@ -12,51 +12,10 @@
 #include "TMath.h"
 
 #include "misc.h"
+#include "analyzer.h" // for ZeroCrossing function and MWIN constant
 
-const float MWIN = 350.;
-
-double ZeroCrossing(std::vector<std::pair<double, double>> points){
-
-  if(points.size() < 2 || points.size() > 3) return TMath::QuietNaN(); // not enough points to find zero crossing
-
-  if( points.size() == 3){ 
-    
-    double y0 = points[0].first;
-    double y1 = points[1].first;
-    double y2 = points[2].first;
-    double x0 = points[0].second;
-    double x1 = points[1].second;
-    double x2 = points[2].second;
-    
-    // solve the quadratic equation ax^2 + bx + c = 0
-    double a = (x0 - x1) * (x0 - x2) * (x1 - x2);
-    double b = x0 * x2 * y1 * (-x0 + x2) + x1 * x1 * (x2 * y0 - x0 * y2) +  x1 * (-x2 * x2 * y0 + x0 * x0 * y2) ; 
-
-    return b /a;
-
-
-  }else if( points.size() == 2 ){
-
-    double x1 = points[0].first;
-    double x2 = points[1].first;
-    double y1 = points[0].second;
-    double y2 = points[1].second;
-
-    if(y1 * y2 > 0) return -1; // no zero crossing
-
-    // linear interpolation to find zero crossing
-    double slope = (y2 - y1) / (x2 - x1);
-    double zeroCrossingX = x1 - y1 / slope;
-
-    return zeroCrossingX;
-
-  }
-
-  return TMath::QuietNaN();
-
-};
-
-int eRange[2] = {0, 6000};
+int eRange[2] = {100, 6000};
+int timeRange[2] = {0, 600};
 
 TH1F * he[110];
 TH2F * heID = new TH2F("heID", "Energy vs Detector ID; Detector ID; Energy [a.u.]", 110, 0, 110, 200, eRange[0], eRange[1]);
@@ -74,7 +33,7 @@ int detX = 70;
 int detY = 62;
 
 TH2F * hGG = new TH2F("hGG", Form("Energy-Energy Det %d vs Det %d; Energy Det %d (a.u.); Energy Det %d (a.u.)", detX, detY, detX, detY), 100, eRange[0], eRange[1], 100, eRange[0], eRange[1]);
-TH1F * hGTimeDiff = new TH1F("hGTimeDiff", Form("Time Difference Det %d - Det %d; Time Difference [ns]; Counts", detX, detY), 100, -250, 250);
+TH1F * hGTimeDiff = new TH1F("hGTimeDiff", Form("Time Difference Det %d - Det %d; Time Difference [ns]; Counts", detX, detY), 500, -100, 100);
 std::vector<float> energyDetX, energyDetY;
 std::vector<double> timeDetX, timeDetY;
 std::vector<float> offsetX, offsetY;
@@ -82,8 +41,8 @@ std::vector<float> offsetX, offsetY;
 TH1F * hTT1 = new TH1F("hTT1", "timestamp diff from 1st hit of events; tick", 400, 0, 1600);
 TH1F * hTT2 = new TH1F("hT21", "TrigTS diff from 1st hit of events; tick", 400, 0, 1600);
 
-TH2F * hTDiffHitOrder = new TH2F("hTDiffHitOrder", "62 ; time diff [ns]; order", 1000, 450, 1000, 10, 0, 10 );
-TH2F * hTDiffEnergy = new TH2F("hTDiffEnergy", "62", 1000, 450, 1000, 200, eRange[0], eRange[1] );
+TH2F * hTDiffHitOrder = new TH2F("hTDiffHitOrder", "62 ; time diff [ns]; order", 1000,  timeRange[0], timeRange[1], 10, 0, 10 );
+TH2F * hTDiffEnergy = new TH2F("hTDiffEnergy", "62", 1000,  timeRange[0], timeRange[1], 200, eRange[0], eRange[1] );
 
 void analyzer(TString rootFileName){
 
@@ -96,9 +55,8 @@ void analyzer(TString rootFileName){
   TTreeReaderValue<UInt_t>             nHits(reader, "NumHits");
   // TTreeReaderArray<UShort_t>              id(reader, "id");
   TTreeReaderArray<UShort_t>           detID(reader, "detID");
-  TTreeReaderArray<UInt_t>     preRiseEnergy(reader, "pre_rise_energy");
-  TTreeReaderArray<UInt_t>    postRiseEnergy(reader, "post_rise_energy");
-  TTreeReaderArray<ULong64_t> eventTimestamp(reader, "event_timestamp");
+  TTreeReaderArray<long long>          energy(reader, "energy");
+  TTreeReaderArray<ULong64_t>        eventTS(reader, "eventTS");
   TTreeReaderArray<ULong64_t>         trigTS(reader, "trigTS");
   TTreeReaderArray<Short_t>     CFD_sample_0(reader, "CFD_sample_0");
   TTreeReaderArray<Short_t>     CFD_sample_1(reader, "CFD_sample_1");
@@ -115,7 +73,7 @@ void analyzer(TString rootFileName){
 
     TString histNameTDiff = Form("hTDiff%03d", i+1);
     TString histTitleTDiff = Form("Time Difference Spectrum for Detector %d; Time Difference [ns]; Counts", i+1);
-    hTDiff[i] = new TH1F(histNameTDiff, histTitleTDiff, 1000, 500, 1000);
+    hTDiff[i] = new TH1F(histNameTDiff, histTitleTDiff, 1000, timeRange[0], timeRange[1]);
   }
 
   //^================================== Analysis Loop ==================================^//
@@ -130,7 +88,7 @@ void analyzer(TString rootFileName){
   unsigned int noTACEventCount = 0;
   
   for( int entry = 0; entry < nEntries ; entry++ ){
-    reader.Next();  
+    reader.Next(); 
     
     for ( int i = 0; i < 110; i++ ){
       time0[i] = TMath::QuietNaN();
@@ -148,17 +106,24 @@ void analyzer(TString rootFileName){
     // hMultiHits->Fill(*nHits);
     unsigned short gammaHit = 0;
     std::vector<std::pair<double, double>> points;
-
     double timestamp;
+    for( unsigned int hit = 0; hit < *nHits; hit++ ){
+      
+      if( detID[hit] == 999 &&  TMath::IsNaN(timeTAC)){ // TAC channel
+        timestamp = static_cast<double>(eventTS[hit]) * 10.0; // in ns
+        timeTAC = timestamp  + energy[hit] / 1000.; // in ns
+      }
+
+    }
 
     for( unsigned int hit = 0; hit < *nHits; hit++ ){
 
       if( hit == 0){
         if( timestamp0 == 0) {
-          timestamp0 = eventTimestamp[hit];
+          timestamp0 = eventTS[hit];
         }else{
-          hTT1->Fill( eventTimestamp[hit] - timestamp0 );
-          timestamp0 = eventTimestamp[hit];
+          hTT1->Fill( eventTS[hit] - timestamp0 );
+          timestamp0 = eventTS[hit];
         }
         if( trigTS0 == 0) {
           trigTS0 = trigTS[hit];
@@ -171,30 +136,30 @@ void analyzer(TString rootFileName){
       // short board = id[hit] / 100;
       // short channel = id[hit] % 100;
 
-      timestamp = static_cast<double>(eventTimestamp[hit]) * 10.0; // in ns
+      timestamp = static_cast<double>(eventTS[hit]) * 10.0; // in ns
 
       if( detID[hit] == 999 ){ // TAC channel
-        if ( TMath::IsNaN(timeTAC)) timeTAC = timestamp  + preRiseEnergy[hit] / 1000.; // in ns
+        continue;
       }else{
 
         if (detID[hit] == 0 ) continue;
 
-        float energy = (postRiseEnergy[hit] - preRiseEnergy[hit] )/ MWIN;
+        double eee = energy[hit] / MWIN;
 
-        if( detID[hit] == 62) energy62 = energy;
+        if( detID[hit] == 62) energy62 = eee;
 
         // printf("Entry: %d, Hit: %d, detID: %d, PreRiseEnergy: %u, PostRiseEnergy: %u, Energy: %.2f, Timestamp: %llu\n", 
-        //         entry, hit, detID[hit], preRiseEnergy[hit], postRiseEnergy[hit], energy, eventTimestamp[hit]);
+        //         entry, hit, detID[hit], energy[hit], postRiseEnergy[hit], energy, eventTS[hit]);
 
-        he[detID[hit]-1]->Fill(energy);
-        heID->Fill( detID[hit], energy );
+        he[detID[hit]-1]->Fill(eee);
+        heID->Fill( detID[hit], eee );
         if( detID[hit] % 2 == 0 ){
-          heIDEven->Fill( detID[hit], energy );
+          heIDEven->Fill( detID[hit], eee );
         }else{
-          heIDOdd->Fill( detID[hit], energy );
+          heIDOdd->Fill( detID[hit], eee );
         }
 
-        if( eRange[0] < energy && energy < eRange[1] ) {
+        if( eRange[0] < eee && eee < eRange[1] ) {
           gsCount[detID[hit]-1] = gammaHit;
           gammaHit ++;
         }
@@ -211,20 +176,22 @@ void analyzer(TString rootFileName){
           time0[detID[hit]-1] = timestamp  + zeroCross ; // in ns
         }
 
-        if ( detID[hit] == detX && eRange[0] < energy && energy < eRange[1] ){
-          energyDetX.push_back( energy );
-          timeDetX.push_back( timestamp + zeroCross );
+        if ( detID[hit] == detX && eRange[0] < eee && eee < eRange[1] ){
+          energyDetX.push_back( eee );
+          // timeDetX.push_back( timestamp + zeroCross );
+          timeDetX.push_back(zeroCross );
           offsetX.push_back( zeroCross );
           // printf("Det %d: Energy: %.2f | Timestamp: %.2f | Offset: %.2f | %.2f\n", detX, energy, timestamp, offsetX.back(), timeDetX.back());
         }
-        if ( detID[hit] == detY && eRange[0] < energy && energy < eRange[1] ){ 
-          energyDetY.push_back( energy );
-          timeDetY.push_back( timestamp + zeroCross );
+        if ( detID[hit] == detY && eRange[0] < eee && eee < eRange[1] ){ 
+          energyDetY.push_back( eee );
+          // timeDetY.push_back( timestamp + zeroCross );
+          timeDetY.push_back( zeroCross );
           offsetY.push_back( zeroCross );
         }
       
         // printf("Entry: %d, Hit: %d, detID: %d, PreRiseEnergy: %u, PostRiseEnergy: %u, Timestamp: %llu, ZeroCrossing: %.2f ns | time : %.2f\n", 
-        //         entry, hit, detID[hit], preRiseEnergy[hit], postRiseEnergy[hit], eventTimestamp[hit], zeroCross, time0[detID[hit]-1] );
+        //         entry, hit, detID[hit], eee, postRiseEnergy[hit], eventTS[hit], zeroCross, time0[detID[hit]-1] );
 
       }
 
@@ -238,12 +205,12 @@ void analyzer(TString rootFileName){
       for ( unsigned int hit1 = 0; hit1 < *nHits; hit1++ ){
         if( detID[hit1] == 0 || detID[hit1] == 999 ) continue;
         
-        float energy1 = (postRiseEnergy[hit1] - preRiseEnergy[hit1] )/ MWIN;
+        float energy1 = energy[hit1]/ MWIN;
         
         for ( unsigned int hit2 = hit1 + 1; hit2 < *nHits; hit2++ ){
           if( detID[hit2] == 0 || detID[hit2] == 999 ) continue;
 
-          float energy2 = (postRiseEnergy[hit2] - preRiseEnergy[hit2] )/ MWIN;
+          float energy2 = energy[hit2]/ MWIN;
 
           if( detID[hit1] <= detID[hit2] ){
             hIDvID->Fill( detID[hit1], detID[hit2] );
@@ -260,11 +227,11 @@ void analyzer(TString rootFileName){
     if( gammaHit == 3){
       for ( int i = 0; i < 110; i++ ){
         if( TMath::IsNaN(time0[i]) || TMath::IsNaN(timeTAC) ) continue;
-        hTDiff[i]->Fill( timeTAC - time0[i] - 5000);
+        hTDiff[i]->Fill( timeTAC - time0[i]);
 
         if( i == 61){
-          hTDiffHitOrder->Fill(timeTAC - time0[i] - 5000, gsCount[i]);     
-          hTDiffEnergy->Fill(timeTAC - time0[i] - 5000, energy62);     
+          hTDiffHitOrder->Fill(timeTAC - time0[i], gsCount[i]);     
+          hTDiffEnergy->Fill(timeTAC - time0[i], energy62);     
         }
 
       }

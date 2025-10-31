@@ -75,8 +75,7 @@ public:
       TDC tdcHit;
       tdcHit.DecodePackedData(payload);
       
-      if( tdcHit.isTrashData || tdcHit.validBit == 0 ) {
-        // printf(" Trash TDC data found for UniqueID: %u\n", UniqueID);
+      if( tdcHit.isTrashData) {
         digHit.HEADER_TYPE = TRASH_DATA;
         return digHit; // return empty digHit
       }
@@ -96,7 +95,7 @@ public:
       tdc_avg_time += offset; // apply offset
 
       digHit.EVENT_TIMESTAMP = static_cast<uint64_t>(tdc_avg_time / 10.0); // in 10 ns unit
-      digHit.PRE_RISE_ENERGY = static_cast<uint32_t>((tdc_avg_time - (digHit.EVENT_TIMESTAMP * 10)) * 1000); 
+      digHit.POST_RISE_ENERGY = static_cast<uint32_t>((tdc_avg_time - (digHit.EVENT_TIMESTAMP * 10)) * 1000); 
 
       // if ( digHit.EVENT_TIMESTAMP == 0 ){
       //   digHit.HEADER_TYPE = TRASH_DATA;

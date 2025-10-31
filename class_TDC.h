@@ -8,11 +8,19 @@
 #include <cstdint>
 #include <cmath>
 
+enum TACTrash{
+  Valid = 0,
+  NoTrigger = 1,
+  TDCoffsetInvalid = 2,
+  VernierInvalid = 3
+};
+
 class TDC {
 public:
   uint64_t timestampTrig;  // 64-bit
   uint64_t timestampTDC;
   uint32_t coarseTime;
+  int tdcOffset; // in ns
 
   uint32_t trigType;
   uint32_t wheel;
@@ -32,7 +40,7 @@ public:
   double phaseTime[4];
   double avgPhaseTime;
 
-  bool isTrashData = false;
+  TACTrash isTrashData = TACTrash::Valid;
 
   std::vector<uint32_t> payload;
   int offset[4] = {0, 1, 2, 3};
@@ -103,7 +111,7 @@ public:
     // vernierCD = payload[9] & 0xFFFF;
 
     if( packedData[9] == 0x10021001 ) {
-      isTrashData = true;
+      isTrashData = TACTrash::NoTrigger;
       return;
     }
 
@@ -126,6 +134,12 @@ public:
     timestampTrig *= 10; // convert to ns
     timestampTDC *= 10;  // convert to ns
 
+    tdcOffset = static_cast<int>(timestampTDC - timestampTrig);
+    if( tdcOffset < 0 || tdcOffset > 200 ) {
+      isTrashData = TACTrash::TDCoffsetInvalid;
+      return;
+    }
+
     trigType = payload[1];
     wheel = payload[5];
     multiplicity = payload[6];
@@ -145,6 +159,10 @@ public:
   void CalTime(){
 
     validBit = vernierAB >> 12;
+    if( validBit == 0 ) {
+      isTrashData = VernierInvalid;
+      return;
+    }
 
     vernier[0] = (vernierAB >> 6) & 0x3F;
     vernier[1] = vernierAB & 0x3F;

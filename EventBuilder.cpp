@@ -27,7 +27,6 @@
 #define MAX_READ_HITS 300000 // Maximum hits to read at a time
 
 #define ONE_READ true
-//#define USE_TrigTS // comment out if not use trigTS for shorting
 
 #include <sys/time.h> /** struct timeval, select() */
 inline unsigned int getTime_us(){
@@ -39,24 +38,24 @@ inline unsigned int getTime_us(){
   return time_us;
 }
 
+
 // Comparator for min-heap (smallest timestamp on top)
 struct CompareEvent {
-  bool operator()(const DIG& a, const DIG& b) {
-    #ifdef USE_TrigTS
-      return a.TS_OF_TRIGGER_FULL > b.TS_OF_TRIGGER_FULL;
-    #else
-      return a.EVENT_TIMESTAMP > b.EVENT_TIMESTAMP;
-    #endif
-
+  bool useTrigTS;
+  CompareEvent(bool u=false) : useTrigTS(u) {}
+  bool operator()(const DIG& a, const DIG& b) const {
+    if (useTrigTS) return a.TS_OF_TRIGGER_FULL > b.TS_OF_TRIGGER_FULL;
+    return a.EVENT_TIMESTAMP > b.EVENT_TIMESTAMP;
   }
 };
-  
+
 //unsigned long long                        evID = 0;
 unsigned int                            numHit = 0;
 unsigned short                   id[MAX_MULTI] = {0}; 
 unsigned short                detID[MAX_MULTI] = {0}; 
-unsigned int        pre_rise_energy[MAX_MULTI] = {0};  
-unsigned int       post_rise_energy[MAX_MULTI] = {0};  
+// unsigned int        pre_rise_energy[MAX_MULTI] = {0};  
+// unsigned int       post_rise_energy[MAX_MULTI] = {0};
+long int                     energy[MAX_MULTI] = {0};
 unsigned long long        timestamp[MAX_MULTI] = {0};
 unsigned long long           trigTS[MAX_MULTI] = {0};
 
@@ -86,9 +85,10 @@ int main(int argc, char* argv[]) {
   printf("=======================================================\n");  
 
   if( argc < 4){
-    printf("%s [outfile] [timeWindow] [file-1] [file-2] ... \n", argv[0]);
+    printf("%s [outfile] [timeWindow] [use TrigTS] [file-1] [file-2] ... \n", argv[0]);
     printf("      outfile : output root file name\n");
     printf("   timeWindow : nano-sec; if < 0, no event build\n"); 
+    printf("   use TrigTS : 0 (false) or 1 (true); use trigger timestamp for event building\n");
     printf("       file-X : the raw data file(s)\n");
     return -1;
   }
@@ -99,20 +99,18 @@ int main(int argc, char* argv[]) {
 
   TString outFileName = argv[1];
   int timeWindow = atoi(argv[2]);
+  bool USE_TrigTS = atoi(argv[3]);
 
-  const int nFile = argc - 3;
+  const unsigned short nFixedArgs = 4;
+
+  const int nFile = argc - nFixedArgs;
   TString inFileName[nFile];
   for( int i = 0 ; i < nFile ; i++){
-    inFileName[i] = argv[i+3];
+    inFileName[i] = argv[i + nFixedArgs];
   }
 
-  if( ONE_READ){
-    printf("\e[31m########### ONLY READ %d per file.\e[0m\n", MAX_READ_HITS);
-  }
-
-  #ifdef USE_TrigTS
-    printf("########### using trigTS for event building\n");
-  #endif
+  if( ONE_READ) printf("\e[31m########### ONLY READ %d per file.\e[0m\n", MAX_READ_HITS);
+  if( USE_TrigTS ) printf("\e[31m########### using trigTS for event building.\e[0m\n");
 
   printf(" out file : \033[1;33m%s\033[m\n", outFileName.Data());
   if ( timeWindow < 0 ){
@@ -177,8 +175,8 @@ int main(int argc, char* argv[]) {
   
   printf("================= Total number of hits: %lu\n", totalNumHits);
   printf("                       Total file size: %.1f MB\n", totFileSize / (1024.0 * 1024.0));
-  printf("                          Eariest Time: %llu x 10 ns\n", globalEarliestTime);
-  printf("                           Latest Time: %llu x 10 ns\n", globalLastTime);
+  printf("                          Eariest Time: %lu x 10 ns\n", globalEarliestTime);
+  printf("                           Latest Time: %lu x 10 ns\n", globalLastTime);
   printf("                        Total Run Time: %.3f s = %.3f min\n", (globalLastTime - globalEarliestTime) / 1e8, (globalLastTime - globalEarliestTime) / 1e8 / 60.0);
   printf("           Total number of file groups: %zu\n", fileGroups.size());
 
@@ -194,9 +192,10 @@ int main(int argc, char* argv[]) {
   outTree->Branch(         "NumHits",          &numHit, "NumHits/i");
   outTree->Branch(              "id",               id, "id[NumHits]/s");
   outTree->Branch(           "detID",            detID, "detID[NumHits]/s");
-  outTree->Branch( "pre_rise_energy",  pre_rise_energy, "pre_rise_energy[NumHits]/i");
-  outTree->Branch("post_rise_energy", post_rise_energy, "post_rise_energy[NumHits]/i");
-  outTree->Branch( "event_timestamp",        timestamp, "event_timestamp[NumHits]/l");
+  // outTree->Branch( "pre_rise_energy",  pre_rise_energy, "pre_rise_energy[NumHits]/i");
+  // outTree->Branch("post_rise_energy", post_rise_energy, "post_rise_energy[NumHits]/i");
+  outTree->Branch(          "energy",           energy, "energy[NumHits]/L");
+  outTree->Branch(         "eventTS",        timestamp, "eventTS[NumHits]/l");
   outTree->Branch(          "trigTS",           trigTS, "trigTS[NumHits]/l");
 
   outTree->Branch(      "CFD_sample_0",       CFD_sample_0, "CFD_sample_0[NumHits]/S");  
@@ -218,14 +217,16 @@ int main(int argc, char* argv[]) {
 #endif
 
   printf("...... build tree branches\n");
-
+  if( ONE_READ) printf("\e[31m########### ONLY READ %d per file.\e[0m\n", MAX_READ_HITS);
+  if( USE_TrigTS ) printf("\e[31m########### using trigTS for event building.\e[0m\n");
   printf("...... Filling the initial data to hitsQueue\n");
 
   //*=============== read n data from each file
   std::map<unsigned short, unsigned int> hitID; // store the hit ID for the current reader for each DigID
   std::map<unsigned short, short> fileID; // store the file ID for each DigID
   
-  std::priority_queue<DIG, std::vector<DIG>, CompareEvent> hitsQueue; // Priority queue to store events
+  // construct queue using current setting
+  std::priority_queue<DIG, std::vector<DIG>, CompareEvent> hitsQueue{CompareEvent(USE_TrigTS)};
 
   unsigned int skippedTrashData = 0;
   
@@ -345,17 +346,21 @@ int main(int argc, char* argv[]) {
         hitID[digID]++; // Increment the hitID for this DigID
         if( timeWindow < 0 ) break;
       }else{
-        #ifdef USE_TrigTS
-          if( hit.TS_OF_TRIGGER_FULL - events.front().TS_OF_TRIGGER_FULL <= timeWindow ) {
-        #else
-          if( hit.EVENT_TIMESTAMP - events.front().EVENT_TIMESTAMP <= timeWindow ) {
-        #endif
-          events.push_back(hit); // Add the hit to the events vector
-          hitsQueue.pop();
-          hitProcessed++; // Increment the hitProcessed count
-          hitID[digID]++; // Increment the hitID for this DigID
-        }else{
-          break;
+        {
+          unsigned long long delta;
+          if (USE_TrigTS) {
+            delta = hit.TS_OF_TRIGGER_FULL - events.front().TS_OF_TRIGGER_FULL;
+          }else{
+            delta = hit.EVENT_TIMESTAMP - events.front().EVENT_TIMESTAMP;
+          }
+          if (delta <= (unsigned long long)timeWindow) {
+            events.push_back(hit); // Add the hit to the events vector
+            hitsQueue.pop();
+            hitProcessed++; // Increment the hitProcessed count
+            hitID[digID]++; // Increment the hitID for this DigID
+          }else {
+            break;
+          }
         }
       }
 
@@ -383,12 +388,15 @@ int main(int argc, char* argv[]) {
         if (boardID == 99 && channel == 20) {
           detID[i] = 999; // TAC channel set to detID 0
         }
-        // printf("boardID: %hu, channel: %hu, detID: %hu\n", boardID, channel, detID[i]);
 
-        pre_rise_energy[i]  = events[i].PRE_RISE_ENERGY; // Pre-rise energy
-        post_rise_energy[i] = events[i].POST_RISE_ENERGY; // Post-rise energy
-        timestamp[i]        = events[i].EVENT_TIMESTAMP; // Timestamp
+        if( channel < 6  ){ // BGO
+          detID[i] = channelMap[boardID][channel + 5] + 1000;
+        }
 
+        // cast to signed to avoid unsigned underflow when PRE_RISE_ENERGY > POST_RISE_ENERGY
+        energy[i] = (long)events[i].POST_RISE_ENERGY - (long)events[i].PRE_RISE_ENERGY;
+
+        timestamp[i] = events[i].EVENT_TIMESTAMP; // Timestamp
         trigTS[i]    = events[i].TS_OF_TRIGGER_FULL;
 
         CFD_sample_0[i]     = events[i].CFD_SAMPLE_0;  
