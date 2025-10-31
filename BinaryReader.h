@@ -144,16 +144,13 @@ inline void BinaryReader::Scan(bool quick, bool debug, bool oneRead) {
 
     do{
       hit.payload = ReadArray<uint32_t>(10); // Read 10 words (40 bytes) for TDC data      
+      totalNumHits ++;
 
       if( hit.payload[0] != 0xAAAAAAAA ) {
         printf("gebHeader error at Data ID : %d \n", totalNumHits);
         break;
       }
-      // if( globalEarliestTime == UINT64_MAX ){
-      //   globalEarliestTime = (static_cast<uint64_t>(hit.payload[3] & 0x0000FFFF) << 32) + hit.payload[2];
-      // }
 
-      totalNumHits ++;
       if( oneRead && totalNumHits >= maxHitSize) break;
     }while(Tell() < fileSize);
 
@@ -200,25 +197,12 @@ inline void BinaryReader::Scan(bool quick, bool debug, bool oneRead) {
       old_timestamp = hit.gebHeader.timestamp;
     
       if( quick ) {
-        
-        // if( debug && 131487 < totalNumHits && totalNumHits < 131491 ){
-        //   hit.payload = ReadArray<uint32_t>(hit.gebHeader.payload_lenght_byte / sizeof(uint32_t));
-        //   printf("  Payload size: %zu words\n", hit.payload.size());
-        //   for (size_t i = 0; i < hit.payload.size(); ++i) {
-        //     printf("%3zu: 0x%08X\n", i, ntohl(hit.payload[i]));
-        //   }
-        // }else{
-        // file.seekg( hit.gebHeader.payload_lenght_byte, std::ios::cur );
-        // }
-
         file.seekg( hit.gebHeader.payload_lenght_byte, std::ios::cur );
-          
       }else {
         hit.payload = ReadArray<uint32_t>(hit.gebHeader.payload_lenght_byte / sizeof(uint32_t));
       }
     
       totalNumHits ++;
-
       if( oneRead && totalNumHits >= maxHitSize) break;
     }while(Tell() < fileSize);
  

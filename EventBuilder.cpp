@@ -389,9 +389,9 @@ int main(int argc, char* argv[]) {
           detID[i] = 999; // TAC channel set to detID 0
         }
 
-        if( channel < 6  ){ // BGO
-          detID[i] = channelMap[boardID][channel + 5] + 1000;
-        }
+        // if( channel < 6  ){ // BGO
+        //   detID[i] = channelMap[boardID][channel + 5] + 1000;
+        // }
 
         // cast to signed to avoid unsigned underflow when PRE_RISE_ENERGY > POST_RISE_ENERGY
         energy[i] = (long)events[i].POST_RISE_ENERGY - (long)events[i].PRE_RISE_ENERGY;
