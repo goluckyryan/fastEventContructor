@@ -170,7 +170,7 @@ public:
     vernier[3] = vernierCD & 0x3F;
 
 
-    baseTime = timestampTrig - (timestampTrig % 262144);
+    baseTime = timestampTrig - (timestampTrig % 262144); // each coarse time period is 2^18 * 10 ns = 2621440 ns
 
     std::fill(valid, valid + 4, 0);
     std::fill(phaseTime, phaseTime + 4, 0.0);
@@ -227,6 +227,7 @@ public:
     }
 
     printf(" avg Phase Time : %.3f ns\n", avgPhaseTime);
+    printf(" avg Phase Time - TrigTime : %.3f ns\n", avgPhaseTime - static_cast<double>(timestampTrig));
 
     printf("==================================================================\n");
   }

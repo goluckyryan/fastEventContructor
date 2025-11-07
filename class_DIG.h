@@ -620,12 +620,10 @@ private:
                     | ((uint64_t)(Raw_Header[3] & 0x0000FFFF)) << 32;// Word 3: 15..0 
 
 
+    HEADER_TYPE     = (Raw_Header[3] & 0x000F0000) >> 16;// Word 3: 19..16
     PEQ_BYPASS      = ExtractBit(Raw_Header[3], 20);//Word 3 (20)
     TRIG_TS_MODE    = ExtractBit(Raw_Header[3], 21);//Word 3 (21)
     CFD_ESUM_MODE   = ExtractBit(Raw_Header[3], 22);//Word 3, bit 22; new item added 20210817.  Should always be zero in LED mode.
-    HEADER_TYPE     = (Raw_Header[3] & 0x000F0000) >> 16;// Word 3: 19..16
-    PEQ_BYPASS      = ExtractBit(Raw_Header[3], 20);// Word 3 (20)
-    TRIG_TS_MODE    = ExtractBit(Raw_Header[3], 21);// Word 3 (21)
     //Bit 22 of word 3 is not used in LED mode, but is used in CFD mode as of 20210817.
     EVENT_TYPE      = (Raw_Header[3] & 0x03800000) >> 23;// Word 3: 25..23
     HEADER_LENGTH   = (Raw_Header[3] & 0xFC000000) >> 26;// Word 3: 31..26

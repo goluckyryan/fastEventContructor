@@ -26,7 +26,7 @@
 #define MAX_MULTI 1000
 #define MAX_READ_HITS 300000 // Maximum hits to read at a time
 
-#define ONE_READ true
+#define ONE_READ false // only read MAX_READ_HITS per file for testing
 
 #include <sys/time.h> /** struct timeval, select() */
 inline unsigned int getTime_us(){

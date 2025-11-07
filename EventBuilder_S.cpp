@@ -80,7 +80,7 @@ public:
   unsigned int                            numHit = 0;
   unsigned short                   id[MAX_MULTI] = {0}; 
   unsigned short                detID[MAX_MULTI] = {0}; 
-  unsigned int        pre_rise_energy[MAX_MULTI] = {0};  
+  unsigned int        pre_rise_energy[MAX_MULTI] = {0};
   unsigned int       post_rise_energy[MAX_MULTI] = {0};  
   unsigned long long        timestamp[MAX_MULTI] = {0};
   
@@ -166,21 +166,19 @@ public:
     }
   }
 
-  int displayCount = 0;
-
   void TraceAnalysis(){
     if( traceCount <= 0 ) return; // No traces to analyze
     
     for( int i = 0; i < traceCount; i++ ){
       if( traceLen[i] <= 0 ) continue; // Skip if trace length is zero
       
-  // set the trace_data (use vector to manage memory and avoid leaks)
-  int len = traceLen[i];
-  if (len > MAX_TRACE_LEN) len = MAX_TRACE_LEN; // clamp to buffer size
-  std::vector<double> yvec(len);
-  for (int j = 0; j < len; ++j) yvec[j] = trace[i][j];
-  struct trace_data d = { (size_t)len, yvec.data() };
-      
+      // set the trace_data (use vector to manage memory and avoid leaks)
+      int len = traceLen[i];
+      if (len > MAX_TRACE_LEN) len = MAX_TRACE_LEN; // clamp to buffer size
+      std::vector<double> yvec(len);
+      for (int j = 0; j < len; ++j) yvec[j] = trace[i][j];
+      struct trace_data d = { (size_t)len, yvec.data() };
+          
       gsl_multifit_nlinear_fdf f;
       f.f = &fit_model;
       f.df = NULL;   // Use finite differences
@@ -188,7 +186,7 @@ public:
       f.p = 4;
       f.params = &d;
       
-  gsl_vector *x = gsl_vector_alloc(4);
+      gsl_vector *x = gsl_vector_alloc(4);
       gsl_vector_set(x, 0, 100.0); // Initial guess for A
       gsl_vector_set(x, 1, 100.0); // Initial guess for T0
       gsl_vector_set(x, 2, 1.0);   // Initial guess for rise time
@@ -225,8 +223,8 @@ public:
       }
       traceChi2[i] = chi2;
 
-  gsl_multifit_nlinear_free(w);
-  gsl_vector_free(x);
+      gsl_multifit_nlinear_free(w);
+      gsl_vector_free(x);
     }
   }
   
