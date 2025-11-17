@@ -368,8 +368,12 @@ int main(int argc, char* argv[]) {
 
     
     if( events.size() > 0 ) {
-      std::sort(events.begin(), events.end(), [](const DIG& a, const DIG& b) {
-        return a.EVENT_TIMESTAMP < b.EVENT_TIMESTAMP; // Sort events by timestamp
+      std::sort(events.begin(), events.end(), [USE_TrigTS](const DIG& a, const DIG& b) {
+        if ( USE_TrigTS ){
+          return a.TS_OF_TRIGGER_FULL < b.TS_OF_TRIGGER_FULL; // Sort events by trigger timestamp
+        }else{
+          return a.EVENT_TIMESTAMP < b.EVENT_TIMESTAMP; // Sort events by timestamp
+        }
       });
       
       if( events.size() > MAX_MULTI ) {

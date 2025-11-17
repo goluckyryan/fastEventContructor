@@ -83,6 +83,7 @@ public:
   unsigned int        pre_rise_energy[MAX_MULTI] = {0};
   unsigned int       post_rise_energy[MAX_MULTI] = {0};  
   unsigned long long        timestamp[MAX_MULTI] = {0};
+  unsigned long long           trigTS[MAX_MULTI] = {0};
   
   // trace
   unsigned short                            traceCount = 0; 
@@ -107,6 +108,7 @@ public:
       pre_rise_energy[i] = 0;
       post_rise_energy[i] = 0;
       timestamp[i] = 0;
+      trigTS[i] = 0;
     }
 
     traceCount = 0; 
@@ -135,6 +137,7 @@ public:
       pre_rise_energy[i]  = dig[i].PRE_RISE_ENERGY; // Pre-rise energy
       post_rise_energy[i] = dig[i].POST_RISE_ENERGY; // Post-rise energy
       timestamp[i]        = dig[i].EVENT_TIMESTAMP; // Timestamp
+      trigTS[i]           = dig[i].TS_OF_TRIGGER_FULL; // Trigger timestamp
 
       // float eee = ((float)post_rise_energy[i] - (float)pre_rise_energy) / MWIN; 
 
@@ -369,7 +372,8 @@ int main(int argc, char* argv[]) {
   outTree->Branch(           "detID",            data.detID, "detID[NumHits]/s");
   outTree->Branch( "pre_rise_energy",  data.pre_rise_energy, "pre_rise_energy[NumHits]/i");
   outTree->Branch("post_rise_energy", data.post_rise_energy, "post_rise_energy[NumHits]/i");
-  outTree->Branch( "event_timestamp",        data.timestamp, "event_timestamp[NumHits]/l");
+  outTree->Branch(         "eventTS",        data.timestamp, "eventTS[NumHits]/l");
+  outTree->Branch(          "trigTS",           data.trigTS, "trigTS[NumHits]/l");
   
   if( saveTrace ){
     outTree->Branch( "traceCount",  &data.traceCount, "traceCount/s");
@@ -444,7 +448,9 @@ int main(int argc, char* argv[]) {
   using DataPtr = std::unique_ptr<Data>;
   std::queue<DataPtr> dataQueue; // Queue of unique_ptr to avoid expensive Data copies
   std::mutex outQueueMutex; // Mutex for output queue and file writing
-  std::queue<DataPtr> outputQueue;
+  // Use an ordered map keyed by evID so the writer thread can emit entries in evID order
+  std::map<unsigned int, DataPtr> outputMap;
+  unsigned int nextWriteEvID = 0;
   std::condition_variable trace_cv; // Condition variable for thread synchronization
   std::atomic<bool> done(false); // to flag all data is processed. to tell the threads to finish
 
@@ -458,7 +464,7 @@ int main(int argc, char* argv[]) {
        
     //* Create worker threads for trace analysis
     for (int i = 0; i < nWorkers; i++) {
-      threads.emplace_back([i, &dataQueue, &outputQueue, &queueMutex, &trace_cv, &fileCv, &done, &outQueueMutex]() {
+      threads.emplace_back([i, &dataQueue, &outputMap, &queueMutex, &trace_cv, &fileCv, &done, &outQueueMutex]() {
         DataPtr localData;
         int count = 0;
         while (true) {
@@ -474,9 +480,13 @@ int main(int argc, char* argv[]) {
           if (localData) localData->TraceAnalysis(); // Perform trace analysis if enabled
           count++;
 
-          {// push processed data to output queue
+          {// push processed data to ordered output map
             std::lock_guard<std::mutex> lock(outQueueMutex);
-            outputQueue.push(std::move(localData)); // move processed pointer to output queue (no copy)
+            if (localData) {
+              unsigned int id = localData->evID;
+              // emplace will insert the DataPtr keyed by evID; if a duplicate key exists, it will not overwrite
+              outputMap.emplace(id, std::move(localData));
+            }
             fileCv.notify_one(); // Notify the output tree thread to write data
           }
         }
@@ -489,23 +499,43 @@ int main(int argc, char* argv[]) {
     outTreeThread = std::thread([&]() {
       int count = 0;
       while (true) {
-        
-        std::unique_lock<std::mutex> lock(outQueueMutex);   
-        fileCv.wait(lock, [&] { return !outputQueue.empty() || allEventProcessed; }); // Wait for data to be available in the output queue or all events are processed
-        if (allEventProcessed && outputQueue.empty()) {
-          printf("Writing data to output tree: %d items processed, out Queue size %ld\n", count, outputQueue.size());
-          break; // Exit if all data is processed and output queue is empty
+
+        std::unique_lock<std::mutex> lock(outQueueMutex);
+        // Wait until either (a) the expected next evID is available in the map, or (b) all events processed
+        fileCv.wait(lock, [&] {
+          if (allEventProcessed) return !outputMap.empty() || outputMap.empty();
+          return outputMap.find(nextWriteEvID) != outputMap.end();
+        });
+
+        if (allEventProcessed && outputMap.empty()) {
+          printf("Writing data to output tree: %d items processed, out Queue size %ld\n", count, (long)outputMap.size());
+          break; // Exit if all data is processed and output map is empty
         }
-        DataPtr temp_data = std::move(outputQueue.front()); // take ownership (no copy)
-        outputQueue.pop();
+
+        // Prefer to write the expected next evID. If we're finishing (allEventProcessed) and the exact ID
+        // isn't available, fall back to writing the smallest available evID.
+        auto it = outputMap.find(nextWriteEvID);
+        if (it == outputMap.end()) {
+          // Not found; in normal operation we should wait until nextWriteEvID is produced.
+          // If we're here, it means allEventProcessed==true (because the waiter would have blocked otherwise).
+          it = outputMap.begin();
+        }
+
+        DataPtr temp_data = std::move(it->second);
+        unsigned int writtenEv = it->first;
+        outputMap.erase(it);
         lock.unlock(); // Release outQueueMutex as soon as possible
 
         // Copy into the tree-fill object (one copy here)
         //TODO use TBranch SetAddress to directly point to the data in temp_data to avoid this copy
         if (temp_data) data = *temp_data;
-         
+
         outTree->Fill(); // Fill the tree with the data
         outFile->cd(); // Ensure the output file is set as the current directory
+
+        // Advance nextWriteEvID to the next expected value. If we wrote a later ID while finishing,
+        // set nextWriteEvID to writtenEv + 1 so subsequent writes continue in increasing order.
+        nextWriteEvID = writtenEv + 1;
 
         count++;
       }
@@ -671,7 +701,7 @@ int main(int argc, char* argv[]) {
     fileCv.notify_all(); // Notify the output tree thread to finish writing data
     {
       std::unique_lock<std::mutex> lock(outQueueMutex);
-      printf("outQueue size before finishing: %ld\n", outputQueue.size());
+      printf("outQueue size before finishing: %ld\n", (long)outputMap.size());
     }
     outTreeThread.join(); // Wait for the output tree thread to finish
     printf("Output tree thread finished writing to file.\n");
