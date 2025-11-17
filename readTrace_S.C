@@ -145,6 +145,9 @@ void readRawTrace(TString fileName, int minDetID = 0, int maxDetID = 999000, boo
          int idDet  = id[j];
          
          if( !(minDetID <=  idDet &&  idDet <= maxDetID ) ) continue;
+
+         if( !(6 < tracePara[j][2] && tracePara[j][2] < 7 ) ) continue;
+         if( !(70 < tracePara[j][1] && tracePara[j][1] < 74 ) ) continue;
          
          if( countJ == 0 )  printf("-------------------------------- ev : %d, evPointer : %d| num Trace : %d\n", evID, evPointer, traceCount);
          

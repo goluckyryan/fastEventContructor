@@ -142,7 +142,7 @@ void analyzer(TString rootFileName){
         continue;
       }else{
 
-        if (detID[hit] == 0 ) continue;
+        if (detID[hit] == 0  ) continue;
 
         double eee = energy[hit] / MWIN;
 
