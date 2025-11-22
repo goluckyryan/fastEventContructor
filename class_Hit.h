@@ -91,8 +91,8 @@ public:
       digHit.TS_OF_TRIGGER_FULL = tdcHit.timestampTrig / 10; // in 10 ns
 
       //TODO to add offset correction here if needed
-      double offset = -5500; // in ns unit
-      tdc_avg_time += offset; // apply offset
+      // double offset = 0; // in ns unit
+      // tdc_avg_time += offset; // apply offset
 
       digHit.EVENT_TIMESTAMP = static_cast<uint64_t>(tdc_avg_time / 10.0); // in 10 ns unit
       digHit.POST_RISE_ENERGY = static_cast<uint32_t>((tdc_avg_time - (digHit.EVENT_TIMESTAMP * 10)) * 1000); 

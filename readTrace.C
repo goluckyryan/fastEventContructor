@@ -30,7 +30,7 @@ double WSFunc(double *x , double * par ){
    return par[0]* TMath::Exp( ( x[0] - par[1])/par[2] ) + par[3];
 }
 
-void readRawTrace(TString fileName, int minDetID = 0, int maxDetID = 999000, bool print = false){
+void readTrace(TString fileName, int minDetID = 0, int maxDetID = 999000, bool print = false){
 
 /**///==============================================================   
 
@@ -146,8 +146,8 @@ void readRawTrace(TString fileName, int minDetID = 0, int maxDetID = 999000, boo
          
          if( !(minDetID <=  idDet &&  idDet <= maxDetID ) ) continue;
 
-         if( !(6 < tracePara[j][2] && tracePara[j][2] < 7 ) ) continue;
-         if( !(70 < tracePara[j][1] && tracePara[j][1] < 74 ) ) continue;
+         // if( !(6 < tracePara[j][2] && tracePara[j][2] < 7 ) ) continue;
+         // if( !(70 < tracePara[j][1] && tracePara[j][1] < 74 ) ) continue;
          
          if( countJ == 0 )  printf("-------------------------------- ev : %d, evPointer : %d| num Trace : %d\n", evID, evPointer, traceCount);
          

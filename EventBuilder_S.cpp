@@ -42,6 +42,33 @@ inline unsigned int getTime_us(){
 
 #include "misc.h"
 
+struct GSLContext {
+  gsl_multifit_nlinear_workspace *w = nullptr;
+  gsl_vector *x = nullptr;
+  size_t current_n = 0;
+  const size_t p = 4;
+
+  GSLContext() {
+    x = gsl_vector_alloc(p);
+  }
+
+  void Setup(size_t n) {
+    if (n == current_n && w != nullptr) return;
+    
+    if (w) gsl_multifit_nlinear_free(w);
+    
+    const gsl_multifit_nlinear_type *T = gsl_multifit_nlinear_trust;
+    gsl_multifit_nlinear_parameters fdf_params = gsl_multifit_nlinear_default_parameters();
+    w = gsl_multifit_nlinear_alloc(T, &fdf_params, n, p);
+    current_n = n;
+  }
+
+  ~GSLContext() {
+    if (w) gsl_multifit_nlinear_free(w);
+    if (x) gsl_vector_free(x);
+  }
+};
+
 struct trace_data {
   size_t n;
   double *y;
@@ -67,7 +94,10 @@ int fit_model(const gsl_vector * x, void *data, gsl_vector * f){
 
 // Comparator for min-heap (smallest timestamp on top)
 struct CompareEvent {
+  bool useTrigTS;
+  CompareEvent(bool u=false) : useTrigTS(u) {}
   bool operator()(const DIG& a, const DIG& b) const {
+    if (useTrigTS) return a.TS_OF_TRIGGER_FULL > b.TS_OF_TRIGGER_FULL;
     return a.EVENT_TIMESTAMP > b.EVENT_TIMESTAMP;
   }
 };
@@ -115,7 +145,7 @@ public:
     for (int i = 0; i < MAX_TRACE_MULTI; i++) {
       traceDetID[i] = 0;
       traceLen[i] = 0;
-      for (int j = 0; j < MAX_TRACE_LEN; j++) trace[i][j] = 0;
+      // for (int j = 0; j < MAX_TRACE_LEN; j++) trace[i][j] = 0; // Optimization: Don't zero out trace data, it will be overwritten
       for (int j = 0; j < 4; j++) tracePara[i][j] = TMath::QuietNaN();
       traceChi2[i] = TMath::QuietNaN();
     }
@@ -169,7 +199,7 @@ public:
     }
   }
 
-  void TraceAnalysis(){
+  void TraceAnalysis(GSLContext& ctx){
     if( traceCount <= 0 ) return; // No traces to analyze
     
     for( int i = 0; i < traceCount; i++ ){
@@ -189,36 +219,35 @@ public:
       f.p = 4;
       f.params = &d;
       
-      gsl_vector *x = gsl_vector_alloc(4);
+      ctx.Setup(d.n); // Ensure workspace is ready for this size
+      
+      gsl_vector *x = ctx.x;
       gsl_vector_set(x, 0, 100.0); // Initial guess for A
       gsl_vector_set(x, 1, 100.0); // Initial guess for T0
       gsl_vector_set(x, 2, 1.0);   // Initial guess for rise time
       gsl_vector_set(x, 3, 8000.0); // Initial guess for baseline
       
-      const gsl_multifit_nlinear_type *T = gsl_multifit_nlinear_trust;
-      gsl_multifit_nlinear_parameters fdf_params = gsl_multifit_nlinear_default_parameters();
-      gsl_multifit_nlinear_workspace *w = gsl_multifit_nlinear_alloc(T, &fdf_params, d.n, 4);
-      gsl_multifit_nlinear_init(x, &f, w);
+      gsl_multifit_nlinear_init(x, &f, ctx.w);
 
       // Solve the system using iteration
       int status;
       size_t iter = 0, max_iter = 100;
       do {
-        status = gsl_multifit_nlinear_iterate(w);
+        status = gsl_multifit_nlinear_iterate(ctx.w);
         if (status) break;
-        status = gsl_multifit_test_delta(w->dx, w->x, 1e-5, 1e-5);
+        status = gsl_multifit_test_delta(ctx.w->dx, ctx.w->x, 1e-5, 1e-5);
         iter++;
       } while (status == GSL_CONTINUE && iter < max_iter);
 
       // Store the results
-      gsl_vector *result = gsl_multifit_nlinear_position(w);
+      gsl_vector *result = gsl_multifit_nlinear_position(ctx.w);
       tracePara[i][0] = gsl_vector_get(result, 0);
       tracePara[i][1] = gsl_vector_get(result, 1);
       tracePara[i][2] = gsl_vector_get(result, 2);
       tracePara[i][3] = gsl_vector_get(result, 3);
 
       // Calculate chi2
-      gsl_vector *f_res = gsl_multifit_nlinear_residual(w);
+      gsl_vector *f_res = gsl_multifit_nlinear_residual(ctx.w);
       double chi2 = 0.0;
       for (size_t k = 0; k < f_res->size; k++) {
         double r = gsl_vector_get(f_res, k);
@@ -226,8 +255,8 @@ public:
       }
       traceChi2[i] = chi2;
 
-      gsl_multifit_nlinear_free(w);
-      gsl_vector_free(x);
+      // gsl_multifit_nlinear_free(w); // Managed by GSLContext
+      // gsl_vector_free(x); // Managed by GSLContext
     }
   }
   
@@ -253,10 +282,11 @@ int main(int argc, char* argv[]) {
   printf("===        Event Builder S  raw data --> root       ===\n");
   printf("=======================================================\n");  
 
-  if( argc <= 4){
-    printf("%s [outfile] [timeWindow] [save Trace] [trace Analysis] [file-1] [file-2] ... \n", argv[0]);
+  if( argc <= 5){
+    printf("%s [outfile] [timeWindow] [useTrigTS] [save Trace] [trace Analysis] [file-1] [file-2] ... \n", argv[0]);
     printf("        outfile : output root file name\n");
     printf("     timeWindow : tick; if < 0, no event build\n"); 
+    printf("      useTrigTS : 0 : use EVENT_TIMESTAMP, 1 : use TS_OF_TRIGGER_FULL\n");
     printf("     Save Trace : 0 : no, 1 : yes\n");
     printf(" trace Analysis : 0 : no, 1 : yes (single core), >1 : multi-core\n");
     printf("         file-X : the input file(s)\n");
@@ -267,17 +297,17 @@ int main(int argc, char* argv[]) {
 
   TString outFileName = argv[1];
   int timeWindow = atoi(argv[2]);
-  const bool saveTrace = atoi(argv[3]);
-  const short nWorkers = atoi(argv[4]);
+  bool useTrigTS = atoi(argv[3]);
+  const bool saveTrace = atoi(argv[4]);
+  const short nWorkers = atoi(argv[5]);
 
   Data data;
 
-  const int nFile = argc - 5;
+  const int nFile = argc - 6;
   TString inFileName[nFile];
-  for( int i = 0 ; i < nFile ; i++){
-    inFileName[i] = argv[i+5];
-  }
+  for( int i = 0 ; i < nFile ; i++) inFileName[i] = argv[i + 6];
 
+  if( useTrigTS ) printf("\e[31m########### using trigTS for event building.\e[0m\n");
   printf(" out file : \033[1;33m%s\033[m\n", outFileName.Data());
   if ( timeWindow < 0 ){
     printf(" Event building time window : no event build\n");
@@ -386,13 +416,17 @@ int main(int argc, char* argv[]) {
     outTree->Branch("traceChi2", data.traceChi2, "traceChi2[traceCount]/F");
   }
 
+  printf("...... build tree branches\n");
+  if( useTrigTS ) printf("\e[31m########### using trigTS for event building.\e[0m\n");
+  printf("...... Filling the initial data to hitsQueue\n");
+
   LoadChannelMapFromFile();
 
   //*=============== read n data from each file
   std::map<unsigned short, unsigned int> hitID; // store the hit ID for the current reader for each DigID
   std::map<unsigned short, short> fileID; // store the file ID for each DigID
   
-  std::priority_queue<DIG, std::vector<DIG>, CompareEvent> eventQueue; // Priority queue to store events for each thread
+  std::priority_queue<DIG, std::vector<DIG>, CompareEvent> eventQueue{CompareEvent(useTrigTS)}; // Priority queue to store events for each thread
 
   unsigned long skippedTrashData = 0;
 
@@ -467,6 +501,7 @@ int main(int argc, char* argv[]) {
       threads.emplace_back([i, &dataQueue, &outputMap, &queueMutex, &trace_cv, &fileCv, &done, &outQueueMutex]() {
         DataPtr localData;
         int count = 0;
+        GSLContext ctx; // Create GSL context for this thread
         while (true) {
 
           {
@@ -477,7 +512,7 @@ int main(int argc, char* argv[]) {
             dataQueue.pop();
           }
           // Process data
-          if (localData) localData->TraceAnalysis(); // Perform trace analysis if enabled
+          if (localData) localData->TraceAnalysis(ctx); // Perform trace analysis if enabled
           count++;
 
           {// push processed data to ordered output map
@@ -545,6 +580,9 @@ int main(int argc, char* argv[]) {
 
   }
 
+  std::unique_ptr<GSLContext> mainThreadCtx;
+  if (nWorkers == 1) mainThreadCtx = std::make_unique<GSLContext>();
+
   printf("Starting event building loop...\n");
 
   do{
@@ -604,7 +642,13 @@ int main(int argc, char* argv[]) {
         }
       }      
 
-      if( timeWindow >= 0 && events.size() > 0 && events.back().EVENT_TIMESTAMP - events.front().EVENT_TIMESTAMP > timeWindow) {
+      unsigned long long deltaTime = 0;
+      if( useTrigTS ) {
+        deltaTime = events.back().TS_OF_TRIGGER_FULL - events.front().TS_OF_TRIGGER_FULL;
+      } else {
+        deltaTime = events.back().EVENT_TIMESTAMP - events.front().EVENT_TIMESTAMP;
+      }
+      if( timeWindow >= 0 && events.size() > 0 && deltaTime > timeWindow) {
         events.pop_back(); // Remove the last event if it exceeds the time window
         hitID[uniqueID]--; // Decrement the hitID for this DigID
         hitProcessed--; // Decrement the hitProcessed count
@@ -620,9 +664,6 @@ int main(int argc, char* argv[]) {
 
     ///============================== process the events
     if( events.size() > 0 ) {
-      std::sort(events.begin(), events.end(), [](const DIG& a, const DIG& b) {
-        return a.EVENT_TIMESTAMP < b.EVENT_TIMESTAMP; // Sort events by timestamp
-      });
       
       if( nWorkers > 1 ) {
         // Multi-threaded processing
@@ -654,7 +695,7 @@ int main(int argc, char* argv[]) {
         data.Reset();
         data.evID = eventID; // Set the event ID
         data.FillData(events, saveTrace); // Fill data with the events
-        data.TraceAnalysis(); // Perform trace analysis if enabled
+        data.TraceAnalysis(*mainThreadCtx); // Perform trace analysis if enabled
 
         outTree->Fill(); // Fill the tree with the processed data
         

@@ -243,8 +243,8 @@ public:
         // Each word contains two 14-bit samples
         uint16_t sample1 = (word >> 16) & 0x3FFF;
         uint16_t sample2 = word & 0x3FFF;
-        traceData.push_back(sample1);
         traceData.push_back(sample2);
+        traceData.push_back(sample1);
       }
     }
   }
@@ -709,6 +709,7 @@ private:
     //Word 10
     TS_OF_TRIGGER         = (unsigned short) ((Raw_Header[10] & 0xFFFF0000) >> 16);//Word 10 (31:16)
     TS_OF_TRIGGER_FULL    = (EVENT_TIMESTAMP & 0xFFFFFFFF0000) + TS_OF_TRIGGER;
+    if (TS_OF_TRIGGER_FULL < EVENT_TIMESTAMP){ TS_OF_TRIGGER_FULL += 0x10000; }
 
     P2_MODE               = (unsigned short)(ExtractBit(Raw_Header[10], 14));//Word 10 (14)
     CAPTURE_PARST_TS      = (unsigned short)(ExtractBit(Raw_Header[10], 15));//Word 10 (15)

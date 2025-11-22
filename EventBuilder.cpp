@@ -368,13 +368,6 @@ int main(int argc, char* argv[]) {
 
     
     if( events.size() > 0 ) {
-      std::sort(events.begin(), events.end(), [USE_TrigTS](const DIG& a, const DIG& b) {
-        if ( USE_TrigTS ){
-          return a.TS_OF_TRIGGER_FULL < b.TS_OF_TRIGGER_FULL; // Sort events by trigger timestamp
-        }else{
-          return a.EVENT_TIMESTAMP < b.EVENT_TIMESTAMP; // Sort events by timestamp
-        }
-      });
       
       if( events.size() > MAX_MULTI ) {
         printf("\033[31mWarning: More than %d hits in one event, truncating to %d hits.\033[0m\n", MAX_MULTI, MAX_MULTI);
